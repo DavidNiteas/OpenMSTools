@@ -1346,8 +1346,8 @@ def id_dict_to_str(id_dict: Dict[str, int]) -> str:
     :return: 格式化后的字符串
     """
     return "SPEC[T{}N{}S{}]".format(
-                id_dict['controllerType'],
-                id_dict['controllerNumber'],
+                id_dict['controllerType'] if 'controllerType' in id_dict else '?',
+                id_dict['controllerNumber'] if 'controllerNumber' in id_dict else '?',
                 id_dict['scan'],
             )
 
