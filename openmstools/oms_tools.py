@@ -2535,6 +2535,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
                 specs_df["{}:{}".format(exp_id,spec_dict['SPEC_ID'])] = spec_dict
         specs_df = pd.DataFrame(specs_df).transpose().sort_values(by=['EXP_ID','SPEC_INDEX'])
         specs_df.drop(['cleavage_info'],axis=1,inplace=True)
+        specs_df.index.name = 'spec_id'
         return specs_df
     
     @staticmethod
@@ -3600,6 +3601,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             for feature_index, cluster_dict in map_dict.items():
                 clusters_df["{}:{}".format(exp_id,cluster_dict['cluster_ID'])] = cluster_dict
         clusters_df = pd.DataFrame(clusters_df).transpose().sort_values(by=['EXP_ID','cluster_Index'])
+        clusters_df.index.name = 'cluster_id'
         return clusters_df
     
 class OpenMSDataWrapper():
