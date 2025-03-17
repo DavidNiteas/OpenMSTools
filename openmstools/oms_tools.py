@@ -791,6 +791,7 @@ async def mass_trace_detection_coroutine(
     max_traces:int = 0,
 ):
     process_obj.run(ms_exp, mass_traces, max_traces)
+    # process_obj.run(ms_exp, mass_traces)
     
 async def mass_trace_detection_step(
     ms_exps:oms_exps,
@@ -872,6 +873,7 @@ async def elution_peak_detection_step(
     oms.ElutionPeakDetection,
     defualt_params={
         'width_filtering': 'fixed',
+        'max_fwhm': 15.0,
     }
 )
 def elution_peak_detection(
