@@ -2685,7 +2685,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             self.feature_maps = feature_maps.FEATURE_MAPS
         else:
             self.feature_maps = feature_maps
-        self.init_cluster_id_access_map()
+        self.init_feature_id_access_map()
         self.init_search_info()
         self.consensus_map = consensus_map
         self.consensus_map_df = None
@@ -2694,44 +2694,39 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         self.rt_tolerance = rt_tolerance
         self.mz_tolerance_type = mz_tolerance_type
         
-    def init_cluster_id_access_map(self):
-        self.cluster_id_access_map = inverse_dict(unzip_results(self.ClusterIDs()))
-                
-    # def init_search_info(self):
-    #     self.cluster_access = np.array(list(self.CLUSTER_ID_ACCESS_MAP.values()),dtype=object)
-    #     self.cluster_mzs = np.array(list(unzip_results(self.FeatureMZs()).values()))
-    #     self.cluster_RTs = np.array(list(unzip_results(self.FeatureRTs()).values()))
+    def init_feature_id_access_map(self):
+        self.feature_id_access_map = inverse_dict(unzip_results(self.FeatureStringIDs()))
         
     def init_search_info(self):
-        self.cluster_access: Dict[Hashable, Union[List[Tuple[Hashable, int]]],np.ndarray] = {}
-        self.cluster_search_hulls: Dict[Hashable, Dict[str, Union[np.ndarray,List[float]]]] = {}
-        for exp_id, main_range_dict in self.ClusterMainRanges().items():
-            self.cluster_search_hulls[exp_id] = {
+        self.feature_access: Dict[Hashable, Union[List[Tuple[Hashable, int]]],np.ndarray] = {}
+        self.feature_search_hulls: Dict[Hashable, Dict[str, Union[np.ndarray,List[float]]]] = {}
+        for exp_id, main_range_dict in self.FeatureMainRanges().items():
+            self.feature_search_hulls[exp_id] = {
                 'RT_start':[],
                 'RT_end':[],
                 'MZ_start':[],
                 'MZ_end':[],
             }
-            self.cluster_access[exp_id] = []
+            self.feature_access[exp_id] = []
             for i, ((RT_start,MZ_start),(RT_end,MZ_end)) in main_range_dict.items():
-                self.cluster_search_hulls[exp_id]['RT_start'].append(RT_start)
-                self.cluster_search_hulls[exp_id]['RT_end'].append(RT_end)
-                self.cluster_search_hulls[exp_id]['MZ_start'].append(MZ_start)
-                self.cluster_search_hulls[exp_id]['MZ_end'].append(MZ_end)
-                self.cluster_access[exp_id].append((exp_id,i))
-            self.cluster_search_hulls[exp_id]['RT_start'] = np.array(self.cluster_search_hulls[exp_id]['RT_start'])
-            self.cluster_search_hulls[exp_id]['RT_end'] = np.array(self.cluster_search_hulls[exp_id]['RT_end'])
-            self.cluster_search_hulls[exp_id]['MZ_start'] = np.array(self.cluster_search_hulls[exp_id]['MZ_start'])
-            self.cluster_search_hulls[exp_id]['MZ_end'] = np.array(self.cluster_search_hulls[exp_id]['MZ_end'])
-            self.cluster_access[exp_id] = np.array(self.cluster_access[exp_id],dtype=object)
+                self.feature_search_hulls[exp_id]['RT_start'].append(RT_start)
+                self.feature_search_hulls[exp_id]['RT_end'].append(RT_end)
+                self.feature_search_hulls[exp_id]['MZ_start'].append(MZ_start)
+                self.feature_search_hulls[exp_id]['MZ_end'].append(MZ_end)
+                self.feature_access[exp_id].append((exp_id,i))
+            self.feature_search_hulls[exp_id]['RT_start'] = np.array(self.feature_search_hulls[exp_id]['RT_start'])
+            self.feature_search_hulls[exp_id]['RT_end'] = np.array(self.feature_search_hulls[exp_id]['RT_end'])
+            self.feature_search_hulls[exp_id]['MZ_start'] = np.array(self.feature_search_hulls[exp_id]['MZ_start'])
+            self.feature_search_hulls[exp_id]['MZ_end'] = np.array(self.feature_search_hulls[exp_id]['MZ_end'])
+            self.feature_access[exp_id] = np.array(self.feature_access[exp_id],dtype=object)
     
     @property
     def FEATURE_MAPS(self) -> Dict[Hashable, oms.FeatureMap]:
         return self.feature_maps
     
     @property
-    def CLUSTER_ID_ACCESS_MAP(self) -> Dict[Tuple[Hashable, int], int]:
-        return self.cluster_id_access_map
+    def FEATURE_ID_ACCESS_MAP(self) -> Dict[Tuple[Hashable, int], int]:
+        return self.feature_id_access_map
     
     @property
     def CONSENSUS_MAP(self) -> Optional[oms.ConsensusMap]:
@@ -2769,51 +2764,23 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         self.consensus_map_df = value
         
     @property
-    def ClusterAccess(self) -> Dict[Hashable,np.ndarray]:
-        return self.cluster_access
-    
-    # @property
-    # def ClusterMZs(self) -> np.ndarray:
-    #     return self.cluster_mzs
-    
-    # @property
-    # def ClusterRTs(self) -> np.ndarray:
-    #     return self.cluster_RTs
+    def FeatureAccess(self) -> Dict[Hashable,np.ndarray]:
+        return self.feature_access
     
     @property
-    def ClusterSearchHulls(self) -> Dict[Hashable, Dict[str, np.ndarray]]:
-        return self.cluster_search_hulls
-    
-    # def search_cluster(
-    #     self,mz:float,RT:float
-    # ) -> Optional[Tuple[Hashable,int]]:
-    #     mz_atol,mz_rtol = self.MZ_Atols
-    #     mz_mask = np.isclose(self.ClusterMZs, mz, atol=mz_atol, rtol=mz_rtol)
-    #     rt_mask = np.isclose(self.ClusterRTs, RT, atol=self.rt_tolerance,  rtol=0)
-    #     mask = mz_mask & rt_mask
-    #     if mask.any():
-    #         tag_index = np.argwhere(mask).reshape(-1)
-    #         if len(tag_index) > 1:
-    #             distance = np.abs(np.subtract(self.ClusterRTs, RT))
-    #             best_match = np.argmin(distance[tag_index])
-    #             tag_index = tag_index[best_match]
-    #         else:
-    #             tag_index = tag_index[0]
-    #         access_path = tuple(self.ClusterAccess[tag_index])
-    #         return access_path
-    #     else:
-    #         return None
+    def FeatureSearchHulls(self) -> Dict[Hashable, Dict[str, np.ndarray]]:
+        return self.feature_search_hulls
         
-    def search_cluster(
+    def search_feature(
         self,exp_id:Hashable,mz:float,RT:float,
     ) -> Optional[Tuple[Hashable,int]]:
-        RT_mask = ((self.ClusterSearchHulls[exp_id]['RT_start'] - 0.0001) <= RT) & (self.ClusterSearchHulls[exp_id]['RT_end'] + 0.0001 >= RT)
-        MZ_mask = ((self.ClusterSearchHulls[exp_id]['MZ_start'] - 0.0001) <= mz) & (self.ClusterSearchHulls[exp_id]['MZ_end'] + 0.0001 >= mz)
+        RT_mask = ((self.FeatureSearchHulls[exp_id]['RT_start'] - 0.0001) <= RT) & (self.FeatureSearchHulls[exp_id]['RT_end'] + 0.0001 >= RT)
+        MZ_mask = ((self.FeatureSearchHulls[exp_id]['MZ_start'] - 0.0001) <= mz) & (self.FeatureSearchHulls[exp_id]['MZ_end'] + 0.0001 >= mz)
         mask = RT_mask & MZ_mask
         if mask.any():
             tag_index = np.argwhere(mask).reshape(-1)
             tag_index = tag_index[0]
-            access_path = self.ClusterAccess[exp_id][tag_index]
+            access_path = self.FeatureAccess[exp_id][tag_index]
             return access_path
         else:
             return None
@@ -2931,7 +2898,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
     ) -> Dict[Hashable, Dict[int, int]]:
         return self.run_coroutine(self.FeatureID_coroutine, access_path)
     
-    def ClusterID(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
+    def FeatureStringID(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         exp_id, feature_id = access_path
         feature_id = self.FeatureID(access_path)
         if feature_id is not None:
@@ -2940,10 +2907,10 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return None
         
     @AsyncBase.use_coroutine
-    def ClusterID_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
-        return self.ClusterID(access_path)
+    def FeatureStringID_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
+        return self.FeatureStringID(access_path)
     
-    def ClusterIDs(
+    def FeatureStringIDs(
         self, 
         access_path: Union[
             List[Tuple[Hashable, int]],
@@ -2955,7 +2922,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             None,
         ] = None,
     ) -> Dict[Hashable, Dict[int, str]]:
-        return self.run_coroutine(self.ClusterID_coroutine, access_path)
+        return self.run_coroutine(self.FeatureStringID_coroutine, access_path)
     
     def FeatureCharge(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         feature = self.Feature(access_path)
@@ -3110,7 +3077,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
     ) -> Dict[Hashable, Dict[int, PeakConvexHull]]:
         return self.run_coroutine(self.FeatureConvexHull_coroutine, access_path)
     
-    def ClusterMergedRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
+    def FeatureMergedRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
         feature = self.Feature(access_path)
         if feature is not None:
             hull = feature.getConvexHull()
@@ -3120,10 +3087,10 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return None
         
     @AsyncBase.use_coroutine
-    def ClusterMergedRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
-        return self.ClusterMergedRange(access_path)
+    def FeatureMergedRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
+        return self.FeatureMergedRange(access_path)
     
-    def ClusterMergedRanges(
+    def FeatureMergedRanges(
         self, 
         access_path: Union[
             List[Tuple[Hashable, int]],
@@ -3135,9 +3102,9 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             None,
         ] = None,
     ) -> Dict[Hashable, Dict[int, Tuple[Tuple[float,float],Tuple[float,float]]]]:
-        return self.run_coroutine(self.ClusterMergedRange_coroutine, access_path)
+        return self.run_coroutine(self.FeatureMergedRange_coroutine, access_path)
     
-    def ClusterMainRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
+    def FeatureMainRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
         feature = self.Feature(access_path)
         if feature is not None:
             hulls = feature.getConvexHulls()
@@ -3147,10 +3114,10 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return None
         
     @AsyncBase.use_coroutine
-    def ClusterMainRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
-        return self.ClusterMainRange(access_path)
+    def FeatureMainRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
+        return self.FeatureMainRange(access_path)
     
-    def ClusterMainRanges(
+    def FeatureMainRanges(
         self, 
         access_path: Union[
             List[Tuple[Hashable, int]],
@@ -3162,7 +3129,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             None,
         ] = None,
     ) -> Dict[Hashable, Dict[int, Tuple[Tuple[float,float],Tuple[float,float]]]]:
-        return self.run_coroutine(self.ClusterMainRange_coroutine, access_path)
+        return self.run_coroutine(self.FeatureMainRange_coroutine, access_path)
     
     def FeatureLabel(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         feature = self.Feature(access_path)
@@ -3489,13 +3456,13 @@ class FeatureMaps(AsyncBase,ToleranceBase):
     ) -> Dict[Hashable, Dict[int, bool]]:
         return self.run_coroutine(self.FeatureIsUngroupedWithCharge_coroutine, access_paths)
     
-    def ClusterDict(
+    def FeatureDict(
         self, 
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
-            'EXP_ID','cluster_Index','cluster_ID',
-            'cluster_RT','cluster_MZ','cluster_intens','cluster_quality',
+            'EXP_ID','Feature_Index','feature_id',
+            'feature_RT','feature_MZ','feature_intens','feature_quality',
             'adduct','adduct_mz','charge',
             'legal_isotope_pattern','isotope_distances',
             'convex_hull','FWHM','vertex_height',
@@ -3517,10 +3484,10 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         if feature is None:
             return {}
         exp_id, feature_id = access_path
-        cluster_RT = self.FeatureRT(access_path)
-        cluster_MZ = self.FeatureMZ(access_path)
-        cluster_intens = self.FeatureIntensity(access_path)
-        cluster_quality = self.FeatureQuality(access_path)
+        feature_RT = self.FeatureRT(access_path)
+        feature_MZ = self.FeatureMZ(access_path)
+        feature_intens = self.FeatureIntensity(access_path)
+        feature_quality = self.FeatureQuality(access_path)
         adduct = self.FeatureDCChargeAdducts(access_path)
         adduct_mz = self.FeatureDCChargeAdductMass(access_path)
         charge = self.FeatureCharge(access_path)
@@ -3534,20 +3501,20 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         masstrace_centroid_rt = self.FeatureMasstraceCentroidRT(access_path)
         masstrace_centroid_mz = self.FeatureMasstraceCentroidMZ(access_path)
         consensus_tuple = self.search_consensus_map(
-            cluster_MZ,cluster_RT,exp_id,
+            feature_MZ,feature_RT,exp_id,
         )
         if consensus_tuple is not None:
             consensus_group, consensus_MZ, consensus_RT, consensus_quality = consensus_tuple
         else:
             consensus_group, consensus_MZ, consensus_RT, consensus_quality = -1, -1, -1, -1
-        cluster_dict = {
+        feature_dict = {
             'EXP_ID':exp_id,
-            'cluster_Index':feature_id,
-            'cluster_ID':'CLUST[{}]'.format(self.FeatureID(access_path)),
-            'cluster_RT':cluster_RT,
-            'cluster_MZ':cluster_MZ,
-            'cluster_intens':cluster_intens,
-            'cluster_quality':cluster_quality,
+            'Feature_Index':feature_id,
+            'feature_id':'Feature[{}]'.format(self.FeatureID(access_path)),
+            'feature_RT':feature_RT,
+            'feature_MZ':feature_MZ,
+            'feature_intens':feature_intens,
+            'feature_quality':feature_quality,
             'adduct':adduct,
             'adduct_mz':adduct_mz,
             'charge':charge,
@@ -3565,13 +3532,13 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             'consensus_MZ':consensus_MZ,
             'consensus_quality':consensus_quality,
         }
-        return cluster_dict
+        return feature_dict
     
     @AsyncBase.use_coroutine
-    def ClusterDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
-        return self.ClusterDict(access_path)
+    def FeatureDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
+        return self.FeatureDict(access_path)
 
-    def ClustersDict(
+    def FeaturesDict(
         self, 
         access_paths: Union[
             List[Tuple[Hashable, int]],
@@ -3583,9 +3550,9 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             None
         ] = None,
     ) -> Dict[Hashable, Dict[int, Dict]]:
-        return self.run_coroutine(self.ClusterDict_coroutine, access_paths)
+        return self.run_coroutine(self.FeatureDict_coroutine, access_paths)
     
-    def ClusterDataFrame(
+    def FeaturesDataFrame(
         self, 
         access_paths: Union[
             List[Tuple[Hashable, int]],
@@ -3597,14 +3564,14 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             None
         ] = None,
     ) -> Optional[pd.DataFrame]:
-        clusters_df = {}
-        clusters_dict = self.ClustersDict(access_paths)
-        for exp_id, map_dict in clusters_dict.items():
-            for feature_index, cluster_dict in map_dict.items():
-                clusters_df["{}:{}".format(exp_id,cluster_dict['cluster_ID'])] = cluster_dict
-        clusters_df = pd.DataFrame(clusters_df).transpose().sort_values(by=['EXP_ID','cluster_Index'])
-        clusters_df.index.name = 'cluster_id'
-        return clusters_df
+        feature_df = {}
+        features_dict = self.FeaturesDict(access_paths)
+        for exp_id, map_dict in features_dict.items():
+            for feature_index, feature_dict in map_dict.items():
+                feature_df["{}:{}".format(exp_id,feature_dict['feature_id'])] = feature_dict
+        feature_df = pd.DataFrame(feature_df).transpose().sort_values(by=['EXP_ID','Feature_Index'])
+        feature_df.index.name = 'feature_id'
+        return feature_df
     
 class OpenMSDataWrapper():
     
@@ -3674,25 +3641,25 @@ class OpenMSDataWrapper():
             'instrument_type','polarity','peak_type','ionization_method',
             'scan_mode','ms_level','cleavage_info','scan_range',
             'PI','PI_intensity','charge','collision_energy',
-            'cluster_ID','consensus_group',
+            'feature_id','consensus_group',
         ],Union[str,float,int,np.ndarray]
     ]:
         exp_id, spec_index = access_path
         spec_dict = self.EXPS.SpecDict(access_path)
         if spec_dict['ms_level'] != 'ms1':
             if self.has_feature_maps:
-                cluster_access_path = self.FEATURE_MAPS.search_cluster(
+                feature_access_path = self.FEATURE_MAPS.search_feature(
                     exp_id=exp_id,mz=spec_dict['PI'],RT=spec_dict['RT'],
                 )
-                if cluster_access_path is not None:
-                    spec_dict['cluster_ID'] = self.FEATURE_MAPS.ClusterID(cluster_access_path)
+                if feature_access_path is not None:
+                    spec_dict['feature_id'] = self.FEATURE_MAPS.FeatureStringID(feature_access_path)
                     if self.has_consensus_map:
-                        main_range = self.FEATURE_MAPS.ClusterMainRange(cluster_access_path)
+                        main_range = self.FEATURE_MAPS.FeatureMainRange(feature_access_path)
                         if main_range is not None:
-                            (cluster_RT_start,cluster_MZ_start),(cluster_RT_end,cluster_MZ_end) = main_range
+                            (feature_RT_start,feature_MZ_start),(feature_RT_end,feature_MZ_end) = main_range
                             consensus_tuple = self.FEATURE_MAPS.search_consensus_map_by_range(
-                                (cluster_MZ_start,cluster_MZ_end),
-                                (cluster_RT_start,cluster_RT_end),
+                                (feature_MZ_start,feature_MZ_end),
+                                (feature_RT_start,feature_RT_end),
                                 exp_id,
                             )
                             if consensus_tuple is not None:
@@ -3747,13 +3714,13 @@ class OpenMSDataWrapper():
     ) -> Dict[int, pd.DataFrame]:
         return MSExperiments.SpecsDataFrames(self,access_path)
     
-    def ClusterDict(
+    def FeatureDict(
         self, 
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
-            'EXP_ID','cluster_Index','cluster_ID',
-            'cluster_RT','cluster_MZ','cluster_intens','cluster_quality',
+            'EXP_ID','Feature_Index','feature_id',
+            'feature_RT','feature_MZ','feature_intens','feature_quality',
             'adduct','adduct_mz','charge',
             'legal_isotope_pattern','isotope_distances',
             'convex_hull','FWHM','vertex_height',
@@ -3772,29 +3739,29 @@ class OpenMSDataWrapper():
                                             ],Union[float,np.ndarray]
                                         ],List[str]]
     ]:
-        exp_id, cluster_index = access_path
-        cluster_dict = self.FEATURE_MAPS.ClusterDict(access_path)
+        exp_id, feature_index = access_path
+        feature_dict = self.FEATURE_MAPS.FeatureDict(access_path)
         access_path_list = self.EXPS.search_ms2_by_range(
             exp_id,
-            (cluster_dict['convex_hull']['main']['MZ_start'],cluster_dict['convex_hull']['main']['MZ_end']),
-            (cluster_dict['convex_hull']['main']['RT_start'],cluster_dict['convex_hull']['main']['RT_end']),
+            (feature_dict['convex_hull']['main']['MZ_start'],feature_dict['convex_hull']['main']['MZ_end']),
+            (feature_dict['convex_hull']['main']['RT_start'],feature_dict['convex_hull']['main']['RT_end']),
         )
         if access_path_list is not None:
             SubordinateSpecAccessPaths = [
                 access_path for access_path in access_path_list 
                 if access_path[0] == exp_id
             ]
-            cluster_dict['SubordinateSpecIDs'] = [
+            feature_dict['SubordinateSpecIDs'] = [
                     self.EXPS.SPEC_UID(tag_access_path) 
                     for tag_access_path in SubordinateSpecAccessPaths
             ]
-        return cluster_dict
+        return feature_dict
     
     @AsyncBase.use_coroutine
-    def ClusterDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
-        return self.ClusterDict(access_path)
+    def FeatureDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
+        return self.FeatureDict(access_path)
 
-    def ClustersDict(
+    def FeaturesDict(
         self, 
         access_paths: Union[
             List[Tuple[Hashable, int]],
@@ -3806,9 +3773,9 @@ class OpenMSDataWrapper():
             None
         ] = None,
     ) -> Dict[Hashable, Dict[int, Dict]]:
-        return self.FEATURE_MAPS.run_coroutine(self.ClusterDict_coroutine, access_paths)
+        return self.FEATURE_MAPS.run_coroutine(self.FeatureDict_coroutine, access_paths)
     
-    def ClusterDataFrame(
+    def FeaturesDataFrame(
         self, 
         access_paths: Union[
             List[Tuple[Hashable, int]],
@@ -3820,11 +3787,11 @@ class OpenMSDataWrapper():
             None
         ] = None,
     ) -> Optional[pd.DataFrame]:
-        return FeatureMaps.ClusterDataFrame(self,access_paths)
+        return FeatureMaps.FeaturesDataFrame(self,access_paths)
     
     def to_dataframes(self) -> Dict[int, pd.DataFrame]:
         df_dict = self.SpecsDataFrames()
-        df_dict[0] = self.ClusterDataFrame()
+        df_dict[0] = self.FeaturesDataFrame()
         return df_dict
 
 if __name__ == '__main__':
