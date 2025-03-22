@@ -2469,6 +2469,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             if (exp_id,PI_SpecID) in self.SPEC_UID_ACCESS_MAP:
                 PI_spec_access = self.SPEC_UID_ACCESS_MAP[(exp_id,PI_SpecID)]
                 RT = self.SpecRT(PI_spec_access)
+            precursor_dict['PI_SpecID'] = f"{exp_id}:{PI_SpecID}"
         mz,intens = self.SpecPeaks(access_path)
         spec_dict = {
             "EXP_ID":exp_id,
@@ -2537,7 +2538,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
                 specs_df["{}:{}".format(exp_id,spec_dict['SPEC_ID'])] = spec_dict
         specs_df = pd.DataFrame(specs_df).transpose().sort_values(by=['EXP_ID','SPEC_INDEX'])
         specs_df.drop(['cleavage_info'],axis=1,inplace=True)
-        specs_df.index.name = 'spec_id'
+        specs_df.index.name = 'spec_uid'
         return specs_df
     
     @staticmethod
@@ -2545,7 +2546,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ms_level_dfs = {}
         for i,ms_level_df in specs_df.groupby('ms_level'):
             ms_level = int(ms_level_df['ms_level'].iloc[0].strip('ms'))
-            ms_level_dfs[ms_level] = ms_level_df
+            ms_level_dfs[ms_level] = ms_level_df.dropna(axis=1, how='all').drop(columns=['ms_level'],inplace=False)
         return ms_level_dfs
     
     def SpecsDataFrames(
@@ -2902,7 +2903,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         exp_id, feature_id = access_path
         feature_id = self.FeatureID(access_path)
         if feature_id is not None:
-            return "{}:CLUST[{}]".format(exp_id, feature_id)
+            return "{}:Feature[{}]".format(exp_id, feature_id)
         else:
             return None
         
@@ -3510,7 +3511,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         feature_dict = {
             'EXP_ID':exp_id,
             'Feature_Index':feature_id,
-            'feature_id':'Feature[{}]'.format(self.FeatureID(access_path)),
+            'openms_feature_id':self.FeatureID(access_path),
             'feature_RT':feature_RT,
             'feature_MZ':feature_MZ,
             'feature_intens':feature_intens,
@@ -3568,9 +3569,9 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         features_dict = self.FeaturesDict(access_paths)
         for exp_id, map_dict in features_dict.items():
             for feature_index, feature_dict in map_dict.items():
-                feature_df["{}:{}".format(exp_id,feature_dict['feature_id'])] = feature_dict
+                feature_df["{}:Feature[{}]".format(exp_id,feature_dict['openms_feature_id'])] = feature_dict
         feature_df = pd.DataFrame(feature_df).transpose().sort_values(by=['EXP_ID','Feature_Index'])
-        feature_df.index.name = 'feature_id'
+        feature_df.index.name = 'feature_uid'
         return feature_df
     
 class OpenMSDataWrapper():
