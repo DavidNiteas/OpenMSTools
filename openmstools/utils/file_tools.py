@@ -1,5 +1,6 @@
 from .base_tools import oms,calculate_mzfile_hash
 from .async_tools import use_coroutine,run_coroutine
+from pathlib import Path
 from typing import Tuple,Dict,Literal,Hashable
 
 def load_mzml_file(file_path: str) -> oms.MSExperiment:
@@ -46,7 +47,7 @@ def load_exp_ms_files(
         path_map = dict(zip(file_path_list, file_path_list))
     elif key_type == "file_name":
         for file_path, exp in exps.items():
-            file_name = file_path.split("/")[-1]
+            file_name = Path(file_path).name
             result_dict[file_name] = exp
             path_map[file_name] = file_path
     elif key_type == "index":
