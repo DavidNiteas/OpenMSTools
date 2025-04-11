@@ -150,7 +150,7 @@ def run_coroutine(
                     List[Tuple[tuple,dict]],
                 ],
                 Dict[Hashable,Any],
-            ]
+            ],None
         ]
     ] = None,
     use_progress: bool = True,
