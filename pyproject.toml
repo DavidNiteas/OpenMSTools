@@ -1,22 +1,23 @@
-[project]
-name = "openmstools"
-version = "0.1.0"
-description = "A re-packaging of OpenMS based on the pyOpenMS library, providing a more user-friendly preprocessing toolkit for mass spectrometry raw data oriented towards metabolomics and small-molecule mass spectrometry."
-authors = [
-    {name = "David Niteas",email = "david.ql.d@foxmail.com"}
-]
-license = {text = "MIT"}
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "pyopenms",
-    "numpy<=1.26.4",
-    "pandas",
-    "trio",
-    "rich",
-]
-
-
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "OpenMSTools"
+version = "0.1.0"
+description = "A re-packaging of OpenMS based on the pyOpenMS library..."
+authors = ["David Niteas <david.ql.d@foxmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [
+    { include = "OpenMSTools" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+pyopenms = "*"
+numpy = "*"
+pandas = "*"
+dask = "*"
+trio = "*"
+rich = "*"
