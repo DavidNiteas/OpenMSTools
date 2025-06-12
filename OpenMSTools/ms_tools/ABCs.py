@@ -77,8 +77,23 @@ class OpenMSMethod(ABC):
 class OpenMSMethodParam(ABC, TomlConfig):
     
     @abstractmethod
-    def dump2openms(self):
+    def dump2openms(self) -> Dict[str, Any]:
         pass
+    
+class OpenMSMethodParamWrapper(OpenMSMethodParam):
+    
+    wrapper_name: ClassVar[str]
+    
+    def dump2openms(self) -> Dict[str, Any]:
+        param_dict = {}
+        for field_name in self.model_fields:
+            field_data = getattr(self, field_name)
+            if isinstance(field_data, OpenMSMethodParam):
+                for openms_key, openms_value in field_data.dump2openms().items():
+                    param_dict[f"{self.wrapper_name}:{openms_key}"] = openms_value
+            else:
+                param_dict[f"{self.wrapper_name}:{field_name}"] = field_data
+        return param_dict
 
 class OpenMSMethodConfig(ABC, TomlConfig):
     
@@ -90,8 +105,11 @@ class OpenMSMethodConfig(ABC, TomlConfig):
         for key in self.model_fields:
             value = getattr(self, key)
             if isinstance(value, OpenMSMethodParam):
-                value = value.dump2openms()
-            param.setValue(key, value)
+                openms_dict = value.dump2openms()
+                for openms_key, openms_value in openms_dict.items():
+                    param.setValue(openms_key, openms_value)
+            else:
+                param.setValue(key, value)
         return param
     
     @property
@@ -99,21 +117,28 @@ class OpenMSMethodConfig(ABC, TomlConfig):
         method = self.openms_method()
         default_param = method.getDefaults()
         default_config = self.__class__()
-        infos = {"name":[],"value":[],"default_value":[],"openms_default_value":[],"description":[]}
+        infos = {"value":{},"default_value":{},"openms_default_value":{},"description":{}}
         names = default_param.keys()
         for name in names:
-            infos["name"].append(name.decode())
-            value = getattr(self, name.decode())
-            if isinstance(value, OpenMSMethodParam):
-                value = value.dump2openms()
-            infos["value"].append(value)
-            default_value = getattr(default_config, name.decode())
-            if isinstance(default_value, OpenMSMethodParam):
-                default_value = default_value.dump2openms()
-            infos["default_value"].append(default_value)
-            infos["openms_default_value"].append(default_param[name])
-            infos["description"].append(default_param.getDescription(name))
-        return pd.DataFrame(infos)
+            infos["openms_default_value"][name.decode()] = default_param[name]
+            infos["description"][name.decode()] = default_param.getDescription(name)
+        for field_name in self.model_fields:
+            field_data = getattr(self, field_name)
+            if isinstance(field_data, OpenMSMethodParam):
+                for name, value in field_data.dump2openms().items():
+                    infos["value"][name] = value
+            else:
+                infos["value"][field_name] = field_data
+        for field_name in default_config.model_fields:
+            field_data = getattr(default_config, field_name)
+            if isinstance(field_data, OpenMSMethodParam):
+                for name, value in field_data.dump2openms().items():
+                    infos["default_value"][name] = value
+            else:
+                infos["default_value"][field_name] = field_data
+        infos = pd.DataFrame(infos)
+        infos.index.name = "param_name"
+        return infos
     
 class ConvertMethodConfig(TomlConfig):
     
@@ -186,6 +211,10 @@ class OpenMSDataWrapper(BaseModel):
     mass_traces: Optional[List[List[oms.MassTrace]]] = None
     features: Optional[List[oms.FeatureMap]] = None
     consensus_maps: Optional[oms.ConsensusMap] = None
+    ref_feature: Optional[oms.FeatureMap] = None
+    ref_exp: Optional[List[oms.MSExperiment]] = None
+    ref_file_paths: Optional[List[str]] = None
+    trafos: Optional[List[oms.TransformationDescription]] = None
 
 class MSTool(ABC):
     

@@ -5,7 +5,7 @@ from decimal import Decimal
 from .ABCs import TomlConfig, OpenMSMethodParam, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
 import dask.bag as db
 from typing_extensions import Self
-from typing import ClassVar,Type,Literal,List
+from typing import ClassVar,Type,Literal,List,Dict
 
 class AdductConfig(ABC, TomlConfig):
     
@@ -103,12 +103,14 @@ class AdductsModeConfig(OpenMSMethodParam):
     )
     mode: Literal["pos", "neg"] = Field("pos", description="选择正负向的加成")
     
-    def dump2openms(self) -> List[str]:
+    def dump2openms(self) -> Dict[Literal['potential_adducts'],List[str]]:
+        param_dict = {}
         match self.mode:
             case 'pos':
-                return self.positive.adducts
+                param_dict['potential_adducts'] = self.positive.adducts
             case 'neg':
-                return self.negative.adducts
+                param_dict['potential_adducts'] = self.negative.adducts
+        return param_dict
 
 class AdductDetectorConfig(OpenMSMethodConfig):
     
@@ -179,15 +181,24 @@ class AdductDetector(MSTool):
         self.openms_adduct_detector = oms.MetaboliteFeatureDeconvolution()
     
     def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+        
         self.openms_adduct_detector.setParameters(self.config.param)
-        features_bag = db.from_sequence(data.features)
-        inputs_bag = features_bag.map(lambda x: (x, oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap()))
+        
+        if len(data.features) == 0:
+            return data
         
         def run_adduct_detector(inputs):
             feature_in, feature_map_out, groups, edges = inputs
             self.openms_adduct_detector.compute(feature_in, feature_map_out, groups, edges)
             return feature_map_out
         
-        outputs_bag = inputs_bag.map(run_adduct_detector)
-        data.features = outputs_bag.compute(scheduler="threads")
+        if len(data.features) == 1:
+            inputs = (data.features[0], oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap())
+            data.features[0] = run_adduct_detector(inputs)
+        else:
+            features_bag = db.from_sequence(data.features)
+            inputs_bag = features_bag.map(lambda x: (x, oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap()))
+            outputs_bag = inputs_bag.map(run_adduct_detector)
+            data.features = outputs_bag.compute(scheduler="threads")
+            
         return data
