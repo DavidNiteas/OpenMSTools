@@ -1,7 +1,7 @@
 from pydantic import Field
 import pyopenms as oms
 import dask.bag as db
-from typing import ClassVar, Type, Literal, List, Optional, Union, Dict, Tuple
+from typing import ClassVar, Type, Literal, Optional
 from .ABCs import OpenMSMethodParamWrapper, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
 
 class SuperimposerConfig(OpenMSMethodParamWrapper):
@@ -191,17 +191,17 @@ class RTAligner(MSTool):
         if len(data.exps) == 0:
             return data
         
-        def run_align_features(inputs):
-            feature_map, trafo = inputs
-            self.transformer.transformRetentionTimes(feature_map, trafo, True)
-            return feature_map
+        def run_align_exps(inputs):
+            exp, trafo = inputs
+            self.transformer.transformRetentionTimes(exp, trafo, True)
+            return exp
         
         if len(data.exps) == 1:
             inputs = (data.exps[0], data.trafos[0])
-            data.exps = [run_align_features(inputs)]
+            data.exps = [run_align_exps(inputs)]
         else:
             inputs_bag = db.from_sequence(zip(data.exps, data.trafos))
-            outputs_bag = inputs_bag.map(run_align_features)
+            outputs_bag = inputs_bag.map(run_align_exps)
             data.exps = outputs_bag.compute(scheduler="threads")
             
         return data
