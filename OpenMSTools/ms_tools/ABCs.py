@@ -152,6 +152,11 @@ class ConvertMethodConfig(TomlConfig):
         for config_name, config_type in self.configs_type.items():
             if config_name not in self.configs:
                 self.configs[config_name] = config_type()
+            if not isinstance(self.configs[config_name], config_type):
+                if isinstance(self.configs[config_name], dict):
+                    self.configs[config_name] = config_type.from_dict(self.configs[config_name])
+                else:
+                    self.configs[config_name] = config_type()
     
     @classmethod
     def from_dict(cls, params: dict) -> Self:
@@ -210,7 +215,7 @@ class OpenMSDataWrapper(BaseModel):
     exps: Optional[List[oms.MSExperiment]] = None
     mass_traces: Optional[List[List[oms.MassTrace]]] = None
     features: Optional[List[oms.FeatureMap]] = None
-    consensus_maps: Optional[oms.ConsensusMap] = None
+    consensus_map: Optional[oms.ConsensusMap] = None
     ref_feature: Optional[oms.FeatureMap] = None
     ref_exp: Optional[List[oms.MSExperiment]] = None
     ref_file_paths: Optional[List[str]] = None
