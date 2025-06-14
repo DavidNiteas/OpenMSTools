@@ -145,7 +145,7 @@ class RTAligner(MSTool):
     def infer_trafo(self, data: OpenMSDataWrapper) -> oms.TransformationDescription:
         
         self.openms_aligner.setParameters(self.config.param)
-        self.openms_aligner.setReference(data.ref_feature)
+        self.openms_aligner.setReference(data.ref_feature_for_align)
         
         if len(data.features) == 0:
             return data

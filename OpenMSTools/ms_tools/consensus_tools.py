@@ -1,7 +1,5 @@
 from pydantic import Field
 import pyopenms as oms
-import dask.bag as db
-from typing_extensions import Self
 from typing import ClassVar, Type, Literal, Optional, Union, Dict
 from .ABCs import OpenMSMethodParamWrapper, ConvertMethodConfig, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
 
@@ -353,10 +351,10 @@ class FeatureLinkerConfig(ConvertMethodConfig):
 class FeatureLinker(MSTool):
     
     config_type: FeatureLinkerConfig = FeatureLinkerConfig
+    config: FeatureLinkerConfig
     
     def __init__(self, config: Optional[FeatureLinkerConfig] = None):
         super().__init__(config)
-        self.config: FeatureLinkerConfig
         self.feature_linker = self.config.config.openms_method()
         
     def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:

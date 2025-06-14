@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field, ConfigDict
+from .structs import OpenMSDataWrapper
+from pydantic import BaseModel, Field
 from abc import ABC,abstractmethod
 import toml
 import pyopenms as oms
 import pandas as pd
 from typing_extensions import Self
-from typing import Type, Dict, Any, Union, Optional, ClassVar, List
+from typing import Type, Dict, Any, Union, ClassVar, List
 
 class TomlConfig(BaseModel):
     
@@ -205,21 +206,6 @@ class ConvertMethodConfig(TomlConfig):
 class MSToolConfig(TomlConfig):
     
     pass
-
-class OpenMSDataWrapper(BaseModel):
-    
-    model_config = ConfigDict({"arbitrary_types_allowed": True})
-    
-    file_paths: Optional[List[str]] = None
-    exp_names: Optional[List[str]] = None
-    exps: Optional[List[oms.MSExperiment]] = None
-    mass_traces: Optional[List[List[oms.MassTrace]]] = None
-    features: Optional[List[oms.FeatureMap]] = None
-    consensus_map: Optional[oms.ConsensusMap] = None
-    ref_feature: Optional[oms.FeatureMap] = None
-    ref_exp: Optional[List[oms.MSExperiment]] = None
-    ref_file_paths: Optional[List[str]] = None
-    trafos: Optional[List[oms.TransformationDescription]] = None
 
 class MSTool(ABC):
     
