@@ -42,3 +42,13 @@ class OpenMSDataWrapper(BaseModel):
             exp_name_bag = file_bag.pluck(0)
             exp_bag = file_bag.pluck(1)
             self.exp_names, self.exps = dask.compute(exp_name_bag, exp_bag, scheduler='threads')
+            
+    def infer_ref_feature_for_align(self):
+        
+        max_feature_num = 0
+        max_feature_map = None
+        for feature_map in self.features:
+            if feature_map.size() > max_feature_num:
+                max_feature_num = feature_map.size()
+                max_feature_map = feature_map
+        self.ref_feature_for_align = max_feature_map

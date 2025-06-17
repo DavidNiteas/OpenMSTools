@@ -160,7 +160,7 @@ class RTAligner(MSTool):
             data.trafos = [run_infer_trafo(inputs)]
         else:
             features_bag = db.from_sequence(data.features)
-            inputs_bag = features_bag.map(lambda x: (x, oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap()))
+            inputs_bag = features_bag.map(lambda x: (x, oms.TransformationDescription()))
             outputs_bag = inputs_bag.map(run_infer_trafo)
             data.trafos = outputs_bag.compute(scheduler="threads")
             

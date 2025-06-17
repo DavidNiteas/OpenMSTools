@@ -170,11 +170,11 @@ class FeatureFinder(MSTool):
             return mass_traces
         
         if len(data.exps) == 1:
-            data.exps = [run_dectect_mass_traces(data.exps[0])]
+            data.mass_traces = [run_dectect_mass_traces(data.exps[0])]
         else:
             inputs_bag = db.from_sequence(data.exps)
             outputs_bag = inputs_bag.map(run_dectect_mass_traces)
-            data.exps = outputs_bag.compute(scheduler="threads")
+            data.mass_traces = outputs_bag.compute(scheduler="threads")
             
         return data
     
