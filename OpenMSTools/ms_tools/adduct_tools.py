@@ -5,7 +5,7 @@ from decimal import Decimal
 from .ABCs import TomlConfig, OpenMSMethodParam, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
 import dask.bag as db
 from typing_extensions import Self
-from typing import ClassVar,Type,Literal,List,Dict
+from typing import ClassVar,Type,Literal,List,Dict,Optional
 
 class AdductConfig(ABC, TomlConfig):
     
@@ -176,7 +176,7 @@ class AdductDetector(MSTool):
     config_type = AdductDetectorConfig
     config: AdductDetectorConfig
     
-    def __init__(self, config = None):
+    def __init__(self, config:Optional[AdductDetectorConfig] = None):
         super().__init__(config)
         self.openms_adduct_detector = oms.MetaboliteFeatureDeconvolution()
     

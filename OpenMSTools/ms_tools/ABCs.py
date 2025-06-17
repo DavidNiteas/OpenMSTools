@@ -1,4 +1,4 @@
-from .structs import OpenMSDataWrapper
+from .data_wrapper import OpenMSDataWrapper
 from pydantic import BaseModel, Field
 from abc import ABC,abstractmethod
 import toml
