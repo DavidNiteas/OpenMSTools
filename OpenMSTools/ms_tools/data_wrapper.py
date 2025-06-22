@@ -1,3 +1,5 @@
+from __future__ import annotations
+from .data_wrapper_structs import SpectrumMap
 from pydantic import BaseModel, ConfigDict
 import pyopenms as oms
 from pathlib import Path
@@ -19,6 +21,37 @@ def load_exp_file(file_path: Union[str,Path]) -> Tuple[str, oms.MSExperiment]:
     else:
         raise ValueError(f"Unsupported file type: {file_type} for file {file_path}, supported types are .mzML and .mzXML")
     return exp_name, exp
+
+class FeatureMap(BaseModel):
+    
+    model_config = ConfigDict({"arbitrary_types_allowed": True})
+    
+    @classmethod
+    def from_oms(cls, feature_map: oms.FeatureMap) -> FeatureMap:
+        pass
+    
+    def to_oms(self) -> oms.FeatureMap:
+        pass
+    
+class XICMap(BaseModel):
+    
+    model_config = ConfigDict({"arbitrary_types_allowed": True})
+    
+    @classmethod
+    def from_oms(
+        cls, 
+        tic_chromatogram: oms.MSChromatogram,
+        peak_chromatograms: List[List[oms.MSChromatogram]],
+    ) -> XICMap:
+        pass
+    
+class ConsensusMap(BaseModel):
+    
+    model_config = ConfigDict({"arbitrary_types_allowed": True})
+    
+    @classmethod
+    def from_oms(cls, consensus_map: oms.ConsensusMap) -> ConsensusMap:
+        pass
 
 class OpenMSDataWrapper(BaseModel):
     
