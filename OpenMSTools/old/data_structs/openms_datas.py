@@ -1,13 +1,17 @@
-from .experiments import MSExperiments
-from .features import FeatureMaps
-from ..utils.base_tools import oms
-from .structs_tools import AsyncBase
+from collections.abc import Hashable
+from typing import Dict, List, Literal, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Hashable, Union, List, Optional, Literal
 
-class OpenMSDataWrapper():
-    
+from ..utils.base_tools import oms
+from .experiments import MSExperiments
+from .features import FeatureMaps
+from .structs_tools import AsyncBase
+
+
+class OpenMSDataWrapper:
+
     def __init__(
         self,
         exps: Union[oms.MSExperiment, List[oms.MSExperiment], Dict[str, oms.MSExperiment]],
@@ -37,34 +41,34 @@ class OpenMSDataWrapper():
             )
         else:
             self.feature_maps = None
-        
+
     @property
     def EXPS(self) -> MSExperiments:
         return self.exps
-    
+
     @property
     def FEATURE_MAPS(self) -> FeatureMaps:
         return self.feature_maps
-    
+
     @property
     def CONSENSUS_MAP(self) -> Optional[oms.ConsensusMap]:
         return self.FEATURE_MAPS.CONSENSUS_MAP
-    
+
     @property
     def has_feature_maps(self) -> bool:
         if self.FEATURE_MAPS is None:
             return False
         else:
             return True
-    
+
     @property
     def has_consensus_map(self) -> bool:
         if self.has_feature_maps:
             return self.FEATURE_MAPS.has_consensus_map
         return False
-    
+
     def SpecDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
@@ -100,17 +104,17 @@ class OpenMSDataWrapper():
                             else:
                                 spec_dict['consensus_group'] = -1
         return spec_dict
-    
+
     @AsyncBase.use_coroutine
     def SpecDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecDict(access_path)
 
     def SpecsDict(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -118,13 +122,13 @@ class OpenMSDataWrapper():
         ] = None,
     ) -> Dict[Hashable, Dict[int, Dict]]:
         return self.EXPS.run_coroutine(self.SpecDict_coroutine, access_paths)
-    
+
     def SpecsDataFrame(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -132,13 +136,13 @@ class OpenMSDataWrapper():
         ] = None,
     ) -> pd.DataFrame:
         return MSExperiments.SpecsDataFrame(self,access_path)
-    
+
     def SpecsDataFrames(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -146,9 +150,9 @@ class OpenMSDataWrapper():
         ] = None,
     ) -> Dict[int, pd.DataFrame]:
         return MSExperiments.SpecsDataFrames(self,access_path)
-    
+
     def FeatureDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
@@ -181,25 +185,25 @@ class OpenMSDataWrapper():
         )
         if access_path_list is not None:
             SubordinateSpecAccessPaths = [
-                access_path for access_path in access_path_list 
+                access_path for access_path in access_path_list
                 if access_path[0] == exp_id
             ]
             feature_dict['SubordinateSpecIDs'] = [
-                    self.EXPS.SPEC_UID(tag_access_path) 
+                    self.EXPS.SPEC_UID(tag_access_path)
                     for tag_access_path in SubordinateSpecAccessPaths
             ]
         return feature_dict
-    
+
     @AsyncBase.use_coroutine
     def FeatureDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureDict(access_path)
 
     def FeaturesDict(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -207,13 +211,13 @@ class OpenMSDataWrapper():
         ] = None,
     ) -> Dict[Hashable, Dict[int, Dict]]:
         return self.FEATURE_MAPS.run_coroutine(self.FeatureDict_coroutine, access_paths)
-    
+
     def FeaturesDataFrame(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -221,7 +225,7 @@ class OpenMSDataWrapper():
         ] = None,
     ) -> Optional[pd.DataFrame]:
         return FeatureMaps.FeaturesDataFrame(self,access_paths)
-    
+
     def to_dataframes(self) -> Dict[int, pd.DataFrame]:
         df_dict = self.SpecsDataFrames()
         df_dict[0] = self.FeaturesDataFrame()

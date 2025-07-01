@@ -1,13 +1,21 @@
-from pydantic import Field
-import pyopenms as oms
+from typing import ClassVar, Literal
+
 import dask.bag as db
-from typing import ClassVar, Type, Literal, Optional
-from .ABCs import OpenMSMethodParamWrapper, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
+import pyopenms as oms
+from pydantic import Field
+
+from .ABCs import (
+    MSTool,
+    OpenMSDataWrapper,
+    OpenMSMethodConfig,
+    OpenMSMethodParamWrapper,
+)
+
 
 class SuperimposerConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "superimposer"
-    
+
     mz_pair_max_distance: float = Field(
         default=0.5, ge=0.0, description="m/z对的最大距离，这个条件适用于哈希表中的配对"
     )
@@ -50,9 +58,9 @@ class SuperimposerConfig(OpenMSMethodParamWrapper):
     )
 
 class DistanceRTConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_RT"
-    
+
     max_difference: float = Field(
         default=100.0, ge=0.0, description="RT距离的最大差异（以秒为单位）"
     )
@@ -64,9 +72,9 @@ class DistanceRTConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="RT距离的权重")
 
 class DistanceMZConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_MZ"
-    
+
     max_difference: float = Field(default=0.3, ge=0.0, description="m/z距离的最大差异")
     unit: Literal["Da", "ppm"] = Field(default="Da", description="m/z距离的单位")
     exponent: float = Field(
@@ -77,9 +85,9 @@ class DistanceMZConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="m/z距离的权重")
 
 class DistanceIntensityConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_intensity"
-    
+
     exponent: float = Field(
         default=1.0,
         ge=0.0,
@@ -88,13 +96,15 @@ class DistanceIntensityConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=0.0, ge=0.0, description="强度距离的权重")
     log_transform: Literal["enabled", "disabled"] = Field(
         default="disabled",
-        description="是否对强度进行对数变换，如果禁用，d = |int_f2 - int_f1| / int_max。如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
+        description="是否对强度进行对数变换，\
+            如果禁用，d = |int_f2 - int_f1| / int_max。\
+            如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
     )
 
 class PairfinderConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "pairfinder"
-    
+
     second_nearest_gap: float = Field(
         default=2.0,
         ge=1.0,
@@ -121,9 +131,11 @@ class PairfinderConfig(OpenMSMethodParamWrapper):
     )
 
 class RTAlignerConfig(OpenMSMethodConfig):
-    
-    openms_method: ClassVar[Type[oms.MapAlignmentAlgorithmPoseClustering]] = oms.MapAlignmentAlgorithmPoseClustering
-    
+
+    openms_method: ClassVar[
+        type[oms.MapAlignmentAlgorithmPoseClustering]
+    ] = oms.MapAlignmentAlgorithmPoseClustering
+
     max_num_peaks_considered: int = Field(
         default=1000, ge=-1, description="最大峰值数，-1表示使用所有峰值"
     )
@@ -133,28 +145,28 @@ class RTAlignerConfig(OpenMSMethodConfig):
     pairfinder: PairfinderConfig = Field(default=PairfinderConfig(), description="配对的参数设置")
 
 class RTAligner(MSTool):
-    
+
     config_type = RTAlignerConfig
     config: RTAlignerConfig
 
-    def __init__(self, config: Optional[RTAlignerConfig] = None):
+    def __init__(self, config: RTAlignerConfig | None = None):
         super().__init__(config)
         self.openms_aligner = oms.MapAlignmentAlgorithmPoseClustering()
         self.transformer = oms.MapAlignmentTransformer()
-        
+
     def infer_trafo(self, data: OpenMSDataWrapper) -> oms.TransformationDescription:
-        
+
         self.openms_aligner.setParameters(self.config.param)
         self.openms_aligner.setReference(data.ref_feature_for_align)
-        
+
         if len(data.features) == 0:
             return data
-        
+
         def run_infer_trafo(inputs):
             feature_map, trafo = inputs
             self.openms_aligner.align(feature_map,trafo)
             return trafo
-        
+
         if len(data.features) == 1:
             inputs = (data.features[0], oms.TransformationDescription())
             data.trafos = [run_infer_trafo(inputs)]
@@ -163,19 +175,19 @@ class RTAligner(MSTool):
             inputs_bag = features_bag.map(lambda x: (x, oms.TransformationDescription()))
             outputs_bag = inputs_bag.map(run_infer_trafo)
             data.trafos = outputs_bag.compute(scheduler="threads")
-            
+
         return data
-        
+
     def align_features(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-        
+
         if len(data.features) == 0:
             return data
-        
+
         def run_align_features(inputs):
             feature_map, trafo = inputs
             self.transformer.transformRetentionTimes(feature_map, trafo, True)
             return feature_map
-        
+
         if len(data.features) == 1:
             inputs = (data.features[0], data.trafos[0])
             data.features = [run_align_features(inputs)]
@@ -183,19 +195,19 @@ class RTAligner(MSTool):
             inputs_bag = db.from_sequence(zip(data.features, data.trafos))
             outputs_bag = inputs_bag.map(run_align_features)
             data.features = outputs_bag.compute(scheduler="threads")
-            
+
         return data
-    
+
     def align_exps(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-        
+
         if len(data.exps) == 0:
             return data
-        
+
         def run_align_exps(inputs):
             exp, trafo = inputs
             self.transformer.transformRetentionTimes(exp, trafo, True)
             return exp
-        
+
         if len(data.exps) == 1:
             inputs = (data.exps[0], data.trafos[0])
             data.exps = [run_align_exps(inputs)]
@@ -203,13 +215,13 @@ class RTAligner(MSTool):
             inputs_bag = db.from_sequence(zip(data.exps, data.trafos))
             outputs_bag = inputs_bag.map(run_align_exps)
             data.exps = outputs_bag.compute(scheduler="threads")
-            
+
         return data
-        
+
     def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-        
+
         data = self.infer_trafo(data)
         data = self.align_features(data)
         data = self.align_exps(data)
-        
+
         return data

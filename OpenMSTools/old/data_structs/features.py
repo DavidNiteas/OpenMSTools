@@ -1,14 +1,21 @@
-from ..utils.base_tools import oms
-from .structs_tools import (
-    AsyncBase,ToleranceBase,ProgressManager,
-    inverse_dict,unzip_results
-)
+from collections.abc import Hashable
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Hashable, Union, List, Optional, Callable, Literal
+
+from ..utils.base_tools import oms
+from .structs_tools import (
+    AsyncBase,
+    ProgressManager,
+    ToleranceBase,
+    inverse_dict,
+    unzip_results,
+)
+
 
 class PeakConvexHull:
-    
+
     def __init__(
         self,
         merged_hull: oms.ConvexHull2D,
@@ -16,10 +23,10 @@ class PeakConvexHull:
     ):
         self.merged_hull = self.oms2py(merged_hull)
         self.sub_hulls = [self.oms2py(sub_hull) for sub_hull in sub_hulls]
-        
+
     def __len__(self) -> int:
         return 1 + len(self.sub_hulls)
-        
+
     def __getitem__(self, index: int) -> Dict[
         Literal[
             'RT_start',
@@ -33,7 +40,7 @@ class PeakConvexHull:
             return self.merged_hull
         else:
             return self.sub_hulls[index-1]
-        
+
     @property
     def MergedHull(self) -> Dict[
         Literal[
@@ -45,7 +52,7 @@ class PeakConvexHull:
         ],Union[float,np.ndarray]
     ]:
         return self.merged_hull
-        
+
     @property
     def MainHull(self) -> Dict[
         Literal[
@@ -57,7 +64,7 @@ class PeakConvexHull:
         ],Union[float,np.ndarray]
     ]:
         return self.sub_hulls[0]
-    
+
     @property
     def TailHulls(self) -> List[Dict[
         Literal[
@@ -69,7 +76,7 @@ class PeakConvexHull:
         ],Union[float,np.ndarray]
     ]]:
         return self.sub_hulls[1:]
-        
+
     def to_dict(self) -> Dict[
         Literal['merged','main','tail'],Dict[
             Literal[
@@ -85,7 +92,7 @@ class PeakConvexHull:
             "main":self.MainHull,
             "tail":self.TailHulls,
         }
-        
+
     @staticmethod
     def oms2py(
         hull_obj: oms.ConvexHull2D,
@@ -107,11 +114,11 @@ class PeakConvexHull:
             "MZ_end":MZ_end,
             "points_array":points_array,
         }
-        
+
 class FeatureMaps(AsyncBase,ToleranceBase):
-    
+
     def __init__(
-        self, 
+        self,
         feature_maps: Union[oms.FeatureMap,List[oms.FeatureMap], Dict[str, oms.FeatureMap]],
         consensus_map: Optional[oms.ConsensusMap] = None,
         consensus_threshold: float = 0.0,
@@ -138,10 +145,10 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         self.mz_tolerance = mz_tolerance
         self.rt_tolerance = rt_tolerance
         self.mz_tolerance_type = mz_tolerance_type
-        
+
     def init_feature_id_access_map(self):
         self.feature_id_access_map = inverse_dict(unzip_results(self.FeatureStringIDs()))
-        
+
     def init_search_info(self):
         self.feature_access: Dict[Hashable, Union[List[Tuple[Hashable, int]]],np.ndarray] = {}
         self.feature_search_hulls: Dict[Hashable, Dict[str, Union[np.ndarray,List[float]]]] = {}
@@ -164,35 +171,35 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             self.feature_search_hulls[exp_id]['MZ_start'] = np.array(self.feature_search_hulls[exp_id]['MZ_start'])
             self.feature_search_hulls[exp_id]['MZ_end'] = np.array(self.feature_search_hulls[exp_id]['MZ_end'])
             self.feature_access[exp_id] = np.array(self.feature_access[exp_id],dtype=object)
-    
+
     @property
     def FEATURE_MAPS(self) -> Dict[Hashable, oms.FeatureMap]:
         return self.feature_maps
-    
+
     @property
     def FEATURE_ID_ACCESS_MAP(self) -> Dict[Tuple[Hashable, int], int]:
         return self.feature_id_access_map
-    
+
     @property
     def CONSENSUS_MAP(self) -> Optional[oms.ConsensusMap]:
         return self.consensus_map
-    
+
     @CONSENSUS_MAP.setter
     def CONSENSUS_MAP(self, value: oms.ConsensusMap) -> None:
         self.consensus_map = value
-    
+
     @property
     def has_consensus_map(self) -> bool:
         return self.consensus_map is not None
-    
+
     @property
     def PathTag(self,) -> Dict[Hashable, oms.FeatureMap]:
         return self.FEATURE_MAPS
-    
+
     @property
     def PathTagLenFunc(self) -> Callable[[Hashable], int]:
         return self.FeatureMap_len
-    
+
     @property
     def ConsensusMapDataFrame(self) -> pd.DataFrame:
         if self.has_consensus_map:
@@ -203,19 +210,19 @@ class FeatureMaps(AsyncBase,ToleranceBase):
                 return self.consensus_map_df
         else:
             return pd.DataFrame()
-        
+
     @ConsensusMapDataFrame.setter
     def ConsensusMapDataFrame(self, value: pd.DataFrame) -> None:
         self.consensus_map_df = value
-        
+
     @property
     def FeatureAccess(self) -> Dict[Hashable,np.ndarray]:
         return self.feature_access
-    
+
     @property
     def FeatureSearchHulls(self) -> Dict[Hashable, Dict[str, np.ndarray]]:
         return self.feature_search_hulls
-        
+
     def search_feature(
         self,exp_id:Hashable,mz:float,RT:float,
     ) -> Optional[Tuple[Hashable,int]]:
@@ -229,12 +236,12 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return access_path
         else:
             return None
-            
+
     def get_consensus_map_df(self) -> pd.DataFrame:
         consensus_df = self.CONSENSUS_MAP.get_df().reset_index(drop=True)
         consensus_df = consensus_df[consensus_df['quality'] > self.consensus_threshold]
         return consensus_df
-    
+
     def search_consensus_map(
         self,
         mz: float,
@@ -257,7 +264,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
                     tag['RT'],
                     tag['quality'],
                 )
-                
+
     def search_consensus_map_by_range(
         self,
         mz_range: Tuple[float,float],
@@ -279,14 +286,14 @@ class FeatureMaps(AsyncBase,ToleranceBase):
                     tag['RT'],
                     tag['quality'],
                 )
-    
+
     def FeatureMap_len(self, exp_id: Hashable) -> Optional[int]:
         feature_map = self.FEATURE_MAPS.get(exp_id, None)
         if feature_map is not None:
             return feature_map.size()
         else:
             return None
-    
+
     def Feature(self, access_path: Tuple[Hashable, int]) -> Optional[oms.Feature]:
         map_id, feature_id = access_path
         feature_map = self.FEATURE_MAPS.get(map_id, None)
@@ -294,17 +301,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature_map[feature_id]
         else:
             return None
-    
+
     @AsyncBase.use_coroutine
     def Feature_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.Feature(access_path)
-    
+
     def Features(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -312,29 +319,29 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, oms.Feature]]:
         return self.run_coroutine(self.Feature_coroutine, access_path)
-        
+
     def __getitem__(self, access_path: Tuple[Hashable, int]) -> Optional[oms.Feature]:
         map_id, feature_id = access_path
         feature_map = self.FEATURE_MAPS[map_id]
         return feature_map[feature_id]
-    
+
     def FeatureID(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getUniqueId()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureID_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureID(access_path)
-    
+
     def FeatureIDs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -342,25 +349,25 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, int]]:
         return self.run_coroutine(self.FeatureID_coroutine, access_path)
-    
+
     def FeatureStringID(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         exp_id, feature_id = access_path
         feature_id = self.FeatureID(access_path)
         if feature_id is not None:
-            return "{}:Feature[{}]".format(exp_id, feature_id)
+            return f"{exp_id}:Feature[{feature_id}]"
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureStringID_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureStringID(access_path)
-    
+
     def FeatureStringIDs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -368,24 +375,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, str]]:
         return self.run_coroutine(self.FeatureStringID_coroutine, access_path)
-    
+
     def FeatureCharge(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getCharge()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureCharge_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureCharge(access_path)
-    
+
     def FeatureCharges(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -393,24 +400,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, int]]:
         return self.run_coroutine(self.FeatureCharge_coroutine, access_path)
-        
+
     def FeatureRT(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getRT()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureRT_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureRT(access_path)
-    
+
     def FeatureRTs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -418,24 +425,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.FeatureRT_coroutine, access_path)
-        
+
     def FeatureMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getMZ()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMZ(access_path)
-    
+
     def FeatureMZs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -443,24 +450,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.FeatureMZ_coroutine, access_path)
-        
+
     def FeatureIntensity(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getIntensity()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureIntensity_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureIntensity(access_path)
-    
+
     def FeatureIntensitys(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -468,7 +475,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.FeatureIntensity_coroutine, access_path)
-        
+
     def FeatureQuality(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         exp_id, feature_id = access_path
         feature = self.Feature(access_path)
@@ -476,17 +483,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getQuality(feature_id)
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureQuality_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureQuality(access_path)
-    
+
     def FeatureQualitys(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -494,7 +501,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.FeatureQuality_coroutine, access_path)
-        
+
     def FeatureConvexHull(self, access_path: Tuple[Hashable, int]) -> Optional[PeakConvexHull]:
         feature = self.Feature(access_path)
         if feature is not None:
@@ -503,17 +510,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return PeakConvexHull(merged_hull, sub_hulls)
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureConvexHull_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureConvexHull(access_path)
-    
+
     def FeatureConvexHulls(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -521,7 +528,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, PeakConvexHull]]:
         return self.run_coroutine(self.FeatureConvexHull_coroutine, access_path)
-    
+
     def FeatureMergedRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
         feature = self.Feature(access_path)
         if feature is not None:
@@ -530,17 +537,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
                 return hull.getBoundingBox2D()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMergedRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMergedRange(access_path)
-    
+
     def FeatureMergedRanges(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -548,7 +555,7 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, Tuple[Tuple[float,float],Tuple[float,float]]]]:
         return self.run_coroutine(self.FeatureMergedRange_coroutine, access_path)
-    
+
     def FeatureMainRange(self, access_path: Tuple[Hashable, int]) -> Tuple[Tuple[float,float],Tuple[float,float]]:
         feature = self.Feature(access_path)
         if feature is not None:
@@ -557,17 +564,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
                 return hulls[0].getBoundingBox2D()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMainRange_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMainRange(access_path)
-    
+
     def FeatureMainRanges(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -575,24 +582,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, Tuple[Tuple[float,float],Tuple[float,float]]]]:
         return self.run_coroutine(self.FeatureMainRange_coroutine, access_path)
-    
+
     def FeatureLabel(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getMetaValue('label')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureLabel_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureLabel(access_path)
-    
+
     def FeatureLabels(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -600,24 +607,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, str]]:
         return self.run_coroutine(self.FeatureLabel_coroutine, access_path)
-        
+
     def FeatureFWHM(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getMetaValue('FWHM')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureFWHM_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureFWHM(access_path)
-    
+
     def FeatureFWHMs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -625,24 +632,24 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.FeatureFWHM_coroutine, access_path)
-        
+
     def FeatureMaxHeight(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         feature = self.Feature(access_path)
         if feature is not None:
             return feature.getMetaValue('max_height')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMaxHeight_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMaxHeight(access_path)
 
     def FeatureMaxHeights(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -657,17 +664,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('num_of_masstraces')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureNumOfMasstraces_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureNumOfMasstraces(access_path)
 
     def FeatureNumOfMasstracesList(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -682,17 +689,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('masstrace_intensity')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMasstraceIntensity_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMasstraceIntensity(access_path)
 
     def FeatureMasstraceIntensities(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -707,17 +714,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('masstrace_centroid_rt')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMasstraceCentroidRT_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMasstraceCentroidRT(access_path)
 
     def FeatureMasstraceCentroidRTs(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -732,17 +739,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('masstrace_centroid_mz')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureMasstraceCentroidMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureMasstraceCentroidMZ(access_path)
 
     def FeatureMasstraceCentroidMZs(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -763,11 +770,11 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         return self.FeatureIsotopeDistances(access_path)
 
     def FeatureIsotopeDistancesList(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -782,17 +789,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('legal_isotope_pattern')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureLegalIsotopePattern_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureLegalIsotopePattern(access_path)
 
     def FeatureLegalIsotopePatterns(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -807,17 +814,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('dc_charge_adducts')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureDCChargeAdducts_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureDCChargeAdducts(access_path)
 
     def FeatureDCChargeAdductsList(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -832,17 +839,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('dc_charge_adduct_mass')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureDCChargeAdductMass_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureDCChargeAdductMass(access_path)
 
     def FeatureDCChargeAdductMasses(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -857,17 +864,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('Group')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureGroup_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureGroup(access_path)
 
     def FeatureGroups(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -882,17 +889,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             return feature.getMetaValue('is_ungrouped_with_charge')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def FeatureIsUngroupedWithCharge_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureIsUngroupedWithCharge(access_path)
 
     def FeatureIsUngroupedWithCharges(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -900,9 +907,9 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, bool]]:
         return self.run_coroutine(self.FeatureIsUngroupedWithCharge_coroutine, access_paths)
-    
+
     def FeatureDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
@@ -978,17 +985,17 @@ class FeatureMaps(AsyncBase,ToleranceBase):
             'consensus_quality':consensus_quality,
         }
         return feature_dict
-    
+
     @AsyncBase.use_coroutine
     def FeatureDict_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.FeatureDict(access_path)
 
     def FeaturesDict(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,
@@ -996,13 +1003,13 @@ class FeatureMaps(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, Dict]]:
         return self.run_coroutine(self.FeatureDict_coroutine, access_paths)
-    
+
     def FeaturesDataFrame(
-        self, 
+        self,
         access_paths: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable], Hashable, None], 
+                Union[List[Hashable], Hashable, None],
                 Union[List[int], int, None]
             ],
             Hashable,

@@ -1,34 +1,39 @@
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict
-import pyopenms as oms
-import rtree
-import pandas as pd
-import numpy as np
-import dask
-import dask.bag as db
+
+import bisect
 import re
 from re import Pattern
-import bisect
-from typing import Optional, Union, List, Tuple, Dict, Literal, ClassVar
+from typing import ClassVar, Literal
+
+import dask
+import dask.bag as db
+import numpy as np
+import pandas as pd
+import pyopenms as oms
+import rtree
+from pydantic import BaseModel, ConfigDict
+
 
 class SpectrumMap(BaseModel):
-    
+
     model_config = ConfigDict({"arbitrary_types_allowed": True})
-    
+
     scan_id_matcher: ClassVar[Pattern] = re.compile(r'scan=(\d+)')
-    
+
     exp_name: str
-    ms1_df: Optional[pd.DataFrame] = None
-    ms2_df: Optional[pd.DataFrame] = None
-    rtree_index: Optional[rtree.index.Index] = None
-    exp_meta: Optional[pd.Series] = None
-    
+    ms1_df: pd.DataFrame | None = None
+    ms2_df: pd.DataFrame | None = None
+    rtree_index: rtree.index.Index | None = None
+    exp_meta: pd.Series | None = None
+
     @staticmethod
     def get_exp_meta(exp: oms.MSExperiment) -> pd.Series:
         spec: oms.MSSpectrum = exp[0]
         meta_info_string = spec.getMetaValue("filter string")
         meta_info_list = meta_info_string.split(" ")
-        ms_type, ion_mode, ion_source = meta_info_list[0], meta_info_list[1], meta_info_list[3]
+        ms_type = meta_info_list[0]
+        ion_mode = meta_info_list[1]
+        ion_source = meta_info_list[3]
         return pd.Series(
             {
                 "ms_type": ms_type,
@@ -36,17 +41,20 @@ class SpectrumMap(BaseModel):
                 "ion_source": ion_source,
             }
         )
-        
+
     @staticmethod
     def get_scan_index(spec: oms.MSSpectrum) -> int:
         scan_id_match = SpectrumMap.scan_id_matcher.search(spec.getNativeID())
         if scan_id_match:
             return int(scan_id_match.group(1))
         else:
-            raise ValueError(f"Cannot extract scan index from spectrum native ID: {spec.getNativeID()}")
-    
+            raise ValueError(
+                f"Cannot extract scan index from \
+                spectrum native ID: {spec.getNativeID()}"
+            )
+
     @staticmethod
-    def ms2spec2dfdict(spec: oms.MSSpectrum) -> Dict[
+    def ms2spec2dfdict(spec: oms.MSSpectrum) -> dict[
         Literal[
             "spec_id",
             "rt",
@@ -56,7 +64,7 @@ class SpectrumMap(BaseModel):
             "mz_array",
             "intensity_array",
         ],
-        Union[int, float, np.ndarray]
+        int | float | np.ndarray
     ]:
         spec_id = SpectrumMap.get_scan_index(spec)
         rt = spec.getRT()
@@ -73,16 +81,16 @@ class SpectrumMap(BaseModel):
             "mz_array": mz_array,
             "intensity_array": intensity_array,
         }
-        
+
     @staticmethod
-    def ms1spec2dfdict(spec: oms.MSSpectrum) -> Dict[
+    def ms1spec2dfdict(spec: oms.MSSpectrum) -> dict[
         Literal[
             "spec_id",
             "rt",
             "mz_array",
             "intensity_array",
         ],
-        Union[int, float, np.ndarray]
+        int | float | np.ndarray
     ]:
         spec_id = SpectrumMap.get_scan_index(spec)
         rt = spec.getRT()
@@ -93,54 +101,82 @@ class SpectrumMap(BaseModel):
             "mz_array": mz_array,
             "intensity_array": intensity_array,
         }
-        
+
     def insert_ms1_id_to_ms2(self) -> None:
         '''
         如果MS2谱图没有对应的MS1谱图ID，则插入-1
         '''
         if self.ms1_df is None or self.ms2_df is None:
-            raise ValueError("MS1 and MS2 dataframes must be loaded before inserting MS1 IDs to MS2 dataframe")
-        self.ms2_df['ms1_id'] = self.ms2_df.index.map(lambda x: bisect.bisect_left(self.ms1_df.index.values,x) - 1).tolist()
-        self.ms2_df['ms1_id'] = self.ms2_df['ms1_id'].map(lambda x: self.ms1_df.index.values[x] if x >= 0 else -1)
-        
+            raise ValueError(
+                "MS1 and MS2 dataframes must be loaded \
+                    before inserting MS1 IDs to MS2 dataframe"
+            )
+        self.ms2_df['ms1_id'] = self.ms2_df.index.map(
+            lambda x: bisect.bisect_left(self.ms1_df.index.values,x) - 1
+        ).tolist()
+        self.ms2_df['ms1_id'] = self.ms2_df['ms1_id'].map(
+            lambda x: self.ms1_df.index.values[x] if x >= 0 else -1
+        )
+
     def convert_scan_to_spec_id(self) -> None:
         if isinstance(self.ms1_df.index.values[0], np.int64):
-            self.ms1_df.index = self.ms1_df.index.map(lambda x: f"{self.exp_name}::ms1::{x}")
+            self.ms1_df.index = self.ms1_df.index.map(
+                lambda x: f"{self.exp_name}::ms1::{x}"
+            )
         if isinstance(self.ms2_df.index.values[0], np.int64):
-            self.ms2_df.index = self.ms2_df.index.map(lambda x: f"{self.exp_name}::ms2::{x}")
+            self.ms2_df.index = self.ms2_df.index.map(
+                lambda x: f"{self.exp_name}::ms2::{x}"
+            )
         if isinstance(self.ms2_df['ms1_id'].iloc[0], np.int64):
-            self.ms2_df['ms1_id'] = self.ms2_df['ms1_id'].map(lambda x: f"{self.exp_name}::ms1::{x}" if x >= 0 else "")
-            
+            self.ms2_df['ms1_id'] = self.ms2_df['ms1_id'].map(
+                lambda x: f"{self.exp_name}::ms1::{x}" if x >= 0 else ""
+            )
+
     def modify_ms2_rt(self) -> None:
-        self.ms2_df['rt'] = self.ms2_df.index.map(lambda x: self.ms1_df.loc[self.ms2_df.loc[x,"ms1_id"],"rt"] if self.ms2_df.loc[x,"ms1_id"] != "" else self.ms2_df.loc[x,"rt"]).tolist()
-        
+        self.ms2_df['rt'] = self.ms2_df.index.map(
+            lambda x: \
+                self.ms1_df.loc[self.ms2_df.loc[x,"ms1_id"],"rt"] \
+                if self.ms2_df.loc[x,"ms1_id"] != "" \
+                else self.ms2_df.loc[x,"rt"]
+        ).tolist()
+
     def init_rtree_index(self) -> None:
         if self.ms2_df is None:
-            raise ValueError("MS2 dataframe must be loaded before initializing R-tree index")
+            raise ValueError(
+                "MS2 dataframe must be loaded before initializing R-tree index"
+            )
         self.rtree_index = rtree.index.Index()
-        for i,(spec_id,rt,precursor_mz) in enumerate(zip(self.ms2_df.index,self.ms2_df['rt'],self.ms2_df['precursor_mz'])):
+        for i,(spec_id,rt,precursor_mz) in enumerate(
+            zip(
+                self.ms2_df.index,
+                self.ms2_df['rt'],
+                self.ms2_df['precursor_mz'],
+            )
+        ):
             self.rtree_index.insert(
                 id=i,
                 coordinates=(precursor_mz, rt, precursor_mz, rt),
                 obj=spec_id
             )
-            
+
     def search_ms2_by_range(
-        self, 
-        coordinates: Tuple[
+        self,
+        coordinates: tuple[
             float, # min_mz
             float, # min_rt
             float, # max_mz
             float, # max_rt
         ]
-    ) -> List[str]:
+    ) -> list[str]:
         if self.rtree_index is None:
-            raise ValueError("R-tree index must be initialized before searching MS2 by range")
+            raise ValueError(
+                "R-tree index must be initialized before searching MS2 by range"
+            )
         return list(self.rtree_index.intersection(coordinates, objects="raw"))
-    
+
     @classmethod
     def from_oms(
-        cls, 
+        cls,
         exp: oms.MSExperiment,
         exp_name: str,
     ) -> SpectrumMap:
@@ -164,4 +200,3 @@ class SpectrumMap(BaseModel):
         spectrum_map.modify_ms2_rt()
         spectrum_map.init_rtree_index()
         return spectrum_map
-        

@@ -1,13 +1,15 @@
-from .base_tools import oms,oms_exps,get_kv_pairs
+from typing import Dict
+
 from .async_tools import trio
-from typing import Dict, Union
+from .base_tools import get_kv_pairs, oms, oms_exps
+
 
 async def copy_ms_experiment_step(ms_exp: oms.MSExperiment, key:str, result_dict:dict, use_blank:bool=False):
     if use_blank:
         result_dict[key] = oms.MSExperiment()
     else:
         result_dict[key] = oms.MSExperiment(ms_exp)
-    
+
 async def copy_ms_experiments_step(ms_exps: Dict[str, oms.MSExperiment], result_dict:dict, use_blank:bool=False):
     async with trio.open_nursery() as nursery:
         for key, ms_exp in ms_exps.items():
@@ -23,7 +25,7 @@ def copy_ms_experiments(ms_exps: oms_exps, use_blank:bool=False) -> oms_exps:
     else:
         trio.run(copy_ms_experiment_step, dict(zip(range(len(ms_exps)), ms_exps)), result_dict, use_blank)
         return list(result_dict.values())
-    
+
 def merge_exps(ms_exps: oms_exps) -> oms.MSExperiment:
     merged_exp = oms.MSExperiment()
     for _,exp in get_kv_pairs(ms_exps):

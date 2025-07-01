@@ -1,9 +1,8 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    get_kv_pairs
-)
+from typing import Dict, List, Optional, Tuple, Union
+
 from .async_tools import trio
-from typing import Optional, Union, List, Dict, Tuple
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms
+
 
 async def detect_adduct_coroutine(
     feature_map_in:oms.FeatureMap,
@@ -13,7 +12,7 @@ async def detect_adduct_coroutine(
     process_obj:oms.MetaboliteFeatureDeconvolution,
 ):
     process_obj.compute(feature_map_in, feature_map_out, consensus_group, consensus_edge)
-    
+
 async def detect_adduct_step(
     feature_maps_in:Union[List[oms.FeatureMap],Dict[str,oms.FeatureMap]],
     feature_maps_out:Union[List[oms.FeatureMap],Dict[str,oms.FeatureMap]],
@@ -24,12 +23,12 @@ async def detect_adduct_step(
     async with trio.open_nursery() as nursery:
         for key,feature_map_in in get_kv_pairs(feature_maps_in):
             nursery.start_soon(
-                detect_adduct_coroutine, 
-                feature_map_in, feature_maps_out[key], 
-                consensus_groups[key], consensus_edges[key], 
+                detect_adduct_coroutine,
+                feature_map_in, feature_maps_out[key],
+                consensus_groups[key], consensus_edges[key],
                 process_obj,
             )
-            
+
 @InitProcessAndParamObj(
     oms.MetaboliteFeatureDeconvolution,
     defualt_params={

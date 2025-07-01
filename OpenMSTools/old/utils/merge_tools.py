@@ -1,18 +1,16 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    oms_exps,
-    get_kv_pairs
-)
+from typing import Literal, Optional, Union
+
 from .async_tools import trio
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms, oms_exps
 from .ms_exp_tools import copy_ms_experiments
-from typing import Optional, Union, Literal
+
 
 async def SpectraMerger_mergeSpectraBlockWise_coroutine(
     merged_exp:oms.MSExperiment,
     process_obj:oms.SpectraMerger,
 ):
     process_obj.mergeSpectraBlockWise(merged_exp)
-    
+
 async def merge_ms1_by_block_step(
     merged_exps:oms_exps,
     process_obj:oms.SpectraMerger,
@@ -74,7 +72,7 @@ async def SpectraMerger_mergeSpectraPrecursors_coroutine(
     process_obj:oms.SpectraMerger,
 ):
     process_obj.mergeSpectraPrecursors(merged_exp)
-    
+
 async def merge_ms2_by_precursors_step(
     merged_exp:oms_exps,
     process_obj:oms.SpectraMerger,
@@ -137,7 +135,7 @@ async def SpectraMerger_average_coroutine(
     average_method:Literal['gaussian', 'tophat']
 ):
     process_obj.average(averaged_exp, average_method)
-    
+
 async def spec_averaging_step(
     averaged_exps:oms_exps,
     process_obj:oms.SpectraMerger,

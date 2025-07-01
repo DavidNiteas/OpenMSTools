@@ -1,11 +1,15 @@
-from .base_tools import get_kv_pairs
+from collections.abc import Hashable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import trio
 from rich.console import Console
-from rich.progress import Progress, ProgressColumn, GetTimeCallable, TaskID
-from typing import List,Tuple,Dict,Union,Optional,Callable,Any,Hashable
+from rich.progress import GetTimeCallable, Progress, ProgressColumn, TaskID
+
+from .base_tools import get_kv_pairs
+
 
 class ProgressManager(Progress):
-    
+
     def __init__(
         self,
         *columns: Union[str, ProgressColumn],
@@ -34,7 +38,7 @@ class ProgressManager(Progress):
             expand=expand,
         )
         self.task_name_id_map = {}
-        
+
     @property
     def Name2ID(self) -> Dict[Hashable,TaskID]:
         return self.task_name_id_map
@@ -60,7 +64,7 @@ class ProgressManager(Progress):
             **fields,
         )
         self.Name2ID[task_name] = task_id
-        
+
     def update(
         self,
         task_name: Hashable,
@@ -86,7 +90,7 @@ class ProgressManager(Progress):
             refresh=refresh,
             **fields,
         )
-        
+
     def update_total(
         self,
         task_name: Hashable,
@@ -104,25 +108,25 @@ class ProgressManager(Progress):
                 self.update(task_name, total=completed, description=description)
 
 def use_coroutine(func):
-    
+
     async def coroutine(
-        key: Union[Hashable, int], 
-        data_dict: Dict[Hashable,Dict[int,Any]], 
-        args: Tuple[Any], 
+        key: Union[Hashable, int],
+        data_dict: Dict[Hashable,Dict[int,Any]],
+        args: Tuple[Any],
         kwargs: Dict[str,Any],
         progress: Union[ProgressManager,None] = None,
     ):
         data_dict[key] = func(*args, **kwargs)
-        
+
         if progress is not None:
             progress.update(func.__name__, advance=1)
-            
+
     coroutine.__inner_func_name__ = func.__name__
-        
+
     return coroutine
 
 async def start_coroutine(
-    func: Callable, 
+    func: Callable,
     func_inps: Union[
         Dict[Hashable, Tuple[tuple,dict]],
         List[Tuple[tuple,dict]],
@@ -133,7 +137,7 @@ async def start_coroutine(
     async with trio.open_nursery() as nursery:
         for key, (args, kwargs) in get_kv_pairs(func_inps):
             nursery.start_soon(func, key, data_dict, args, kwargs, progress)
-            
+
 def run_coroutine(
     func: Callable,
     func_inps: Union[

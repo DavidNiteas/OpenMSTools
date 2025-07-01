@@ -1,7 +1,11 @@
-from ..utils.async_tools import trio, ProgressManager
-from ..utils.base_tools import oms
+from collections.abc import Hashable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
-from typing import Dict, Tuple, Hashable, Any, Union, List, Optional, Callable
+
+from ..utils.async_tools import ProgressManager, trio
+from ..utils.base_tools import oms
+
 
 def ppm2da(mz: float, ppm: float) -> float:
     """
@@ -47,27 +51,27 @@ def inverse_dict(d: dict) -> dict:
     return {v: k for k, v in d.items()}
 
 class AsyncBase:
-    
+
     def __init__(self):
         self.progress = ProgressManager()
-    
+
     @property
     def PathTag(self,) -> Dict[Hashable, Union[oms.MSExperiment, oms.FeatureMap]]:
         pass
-    
+
     @property
     def PathTagLenFunc(self) -> Callable[[Hashable], int]:
         pass
-    
+
     @staticmethod
     def use_coroutine(func) -> Callable:
-        
+
         async def coroutine(
-            self, 
-            access_path: Tuple[Hashable, int], 
-            data_dict: Dict[Hashable,Dict[int,Any]], 
+            self,
+            access_path: Tuple[Hashable, int],
+            data_dict: Dict[Hashable,Dict[int,Any]],
             progress: ProgressManager,
-            *args, 
+            *args,
             **kwargs,
         ):
             exp_id, item_id = access_path
@@ -75,17 +79,17 @@ class AsyncBase:
                 data_dict[exp_id] = {}
             data_dict[exp_id][item_id] = func(self, access_path, *args, **kwargs)
             progress.update(func.__name__,advance=1)
-            
+
         coroutine.__inner_func_name__ = func.__name__
-            
+
         return coroutine
-    
+
     def unzip_access_path(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -121,14 +125,14 @@ class AsyncBase:
                         if 0 <= spec_id < lens:
                             access_path_seq.append((exp_id, spec_id))
         return access_path_seq
-                
+
     async def start_coroutine(
-        self, 
-        func: Callable, 
+        self,
+        func: Callable,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -143,14 +147,14 @@ class AsyncBase:
         async with trio.open_nursery() as nursery:
             for access_path in access_path_list:
                 nursery.start_soon(func, access_path, data_dict, self.progress, *args, **kwargs)
-    
+
     def run_coroutine(
         self,
         func: Callable,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -165,13 +169,13 @@ class AsyncBase:
         with self.progress:
             trio.run(self.start_coroutine, func, access_path, data_dict, args, kwargs)
         return data_dict
-    
+
 class ToleranceBase:
-    
+
     mz_tolerance_type = 'ppm'
     mz_tolerance = 3.0
     rt_tolerance = 6.0
-    
+
     @property
     def MZ_Atols(self) -> Tuple[float,float]:
         if self.mz_tolerance_type == 'ppm':

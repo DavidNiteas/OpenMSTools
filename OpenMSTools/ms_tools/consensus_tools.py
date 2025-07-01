@@ -1,12 +1,21 @@
-from pydantic import Field
+from typing import ClassVar, Literal
+
 import pyopenms as oms
-from typing import ClassVar, Type, Literal, Optional, Union, Dict
-from .ABCs import OpenMSMethodParamWrapper, ConvertMethodConfig, OpenMSMethodConfig, MSTool, OpenMSDataWrapper
+from pydantic import Field
+
+from .ABCs import (
+    ConvertMethodConfig,
+    MSTool,
+    OpenMSDataWrapper,
+    OpenMSMethodConfig,
+    OpenMSMethodParamWrapper,
+)
+
 
 class QTDistanceRTConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_RT"
-    
+
     max_difference: float = Field(default=100.0, ge=0.0, description="RT距离的最大差异")
     exponent: float = Field(
         default=1.0,
@@ -16,9 +25,9 @@ class QTDistanceRTConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="RT距离的权重")
 
 class QTDistanceMZConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_MZ"
-    
+
     max_difference: float = Field(default=0.3, ge=0.0, description="m/z距离的最大差异")
     unit: Literal["Da", "ppm"] = Field(default="Da", description="m/z距离的单位")
     exponent: float = Field(
@@ -29,9 +38,9 @@ class QTDistanceMZConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="m/z距离的权重")
 
 class QTDistanceIntensityConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_intensity"
-    
+
     exponent: float = Field(
         default=1.0,
         ge=0.0,
@@ -40,13 +49,15 @@ class QTDistanceIntensityConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=0.0, ge=0.0, description="强度距离的权重")
     log_transform: Literal["enabled", "disabled"] = Field(
         default="disabled",
-        description="是否对强度进行对数变换，如果禁用，d = |int_f2 - int_f1| / int_max。如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
+        description="是否对强度进行对数变换，\
+            如果禁用，d = |int_f2 - int_f1| / int_max。\
+            如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
     )
 
 class FeatureGroupingAlgorithmQTConfig(OpenMSMethodConfig):
-    
-    openms_method: ClassVar[Type[oms.FeatureGroupingAlgorithmQT]] = oms.FeatureGroupingAlgorithmQT
-    
+
+    openms_method: ClassVar[type[oms.FeatureGroupingAlgorithmQT]] = oms.FeatureGroupingAlgorithmQT
+
     use_identifications: Literal["true", "false"] = Field(
         default="false",
         description="是否从不配对不同注释的特征（没有ID的特征总是匹配；只考虑每个注释的最佳命中）",
@@ -68,7 +79,9 @@ class FeatureGroupingAlgorithmQTConfig(OpenMSMethodConfig):
         default=0.0,
         ge=0.0,
         le=1.0,
-        description="如果使用ID：对于归一化的距离，缺失ID的惩罚是多少？0 = 没有偏差，1 = ID在最大公差内时总是被优先考虑（即使更远）",
+        description="如果使用ID：对于归一化的距离，缺失ID的惩罚是多少？\
+            0 = 没有偏差，\
+            1 = ID在最大公差内时总是被优先考虑（即使更远）",
     )
     ignore_charge: Literal["true", "false"] = Field(
         default="false", description="是否忽略电荷状态（或至少一个未知电荷'0'）"
@@ -85,11 +98,11 @@ class FeatureGroupingAlgorithmQTConfig(OpenMSMethodConfig):
     distance_intensity: QTDistanceIntensityConfig = Field(
         default=QTDistanceIntensityConfig(), description="强度距离的参数设置"
     )
-    
+
 class WarpConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "warp"
-    
+
     enabled: Literal["true", "false"] = Field(
         default="true", description="在Grouping之前，是否使用LOWESS变换内部扭曲特征的RT"
     )
@@ -97,7 +110,10 @@ class WarpConfig(OpenMSMethodParamWrapper):
     mz_tol: float = Field(default=5.0, ge=0.0, description="m/z公差（ppm或Da）")
     max_pairwise_log_fc: float = Field(
         default=0.5,
-        description="兼容性图构建期间，两个兼容信号之间的最大绝对log10倍数变化。如果绝对log倍数变化超过此限制，则来自不同图谱的两个信号将不会在兼容性图中通过边连接（但是，它们可能仍然最终出现在同一连通分量中）。注意：这不限制连接阶段的倍数变化，仅在RT对齐期间限制，我们试图找到高质量的对齐锚点。将此值设置为 < 0 会禁用 FC 检查。",
+        description="兼容性图构建期间，两个兼容信号之间的最大绝对log10倍数变化。\
+            如果绝对log倍数变化超过此限制，则来自不同图谱的两个信号将不会在兼容性图中通过边连接（但是，它们可能仍然最终出现在同一连通分量中）。\
+            注意：这不限制连接阶段的倍数变化，仅在RT对齐期间限制，我们试图找到高质量的对齐锚点。\
+            将此值设置为 < 0 会禁用 FC 检查。",
     )
     min_rel_cc_size: float = Field(
         default=0.5,
@@ -112,9 +128,9 @@ class WarpConfig(OpenMSMethodParamWrapper):
     )
 
 class LinkConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "link"
-    
+
     rt_tol: float = Field(default=30.0, ge=0.0, description="RT公差窗口宽度（秒）")
     mz_tol: float = Field(default=10.0, ge=0.0, description="m/z公差（ppm或Da）")
     charge_merging: Literal["Identical", "With_charge_zero", "Any"] = Field(
@@ -127,9 +143,9 @@ class LinkConfig(OpenMSMethodParamWrapper):
     )
 
 class KDDistanceRTConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_RT"
-    
+
     exponent: float = Field(
         default=1.0,
         ge=0.0,
@@ -138,9 +154,9 @@ class KDDistanceRTConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="RT距离的权重")
 
 class KDDistanceMZConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_MZ"
-    
+
     exponent: float = Field(
         default=2.0,
         ge=0.0,
@@ -149,9 +165,9 @@ class KDDistanceMZConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="m/z距离的权重")
 
 class KDDistanceIntensityConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_intensity"
-    
+
     exponent: float = Field(
         default=1.0,
         ge=0.0,
@@ -163,9 +179,9 @@ class KDDistanceIntensityConfig(OpenMSMethodParamWrapper):
     )
 
 class LOWESSConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "LOWESS"
-    
+
     span: float = Field(
         default=0.666666666666667,
         ge=0.0,
@@ -185,9 +201,9 @@ class LOWESSConfig(OpenMSMethodParamWrapper):
     )
 
 class FeatureGroupingAlgorithmKDConfig(OpenMSMethodConfig):
-    
-    openms_method: ClassVar[Type[oms.FeatureGroupingAlgorithmKD]] = oms.FeatureGroupingAlgorithmKD
-    
+
+    openms_method: ClassVar[type[oms.FeatureGroupingAlgorithmKD]] = oms.FeatureGroupingAlgorithmKD
+
     warp: WarpConfig = Field(default=WarpConfig(), description="Warp配置")
     link: LinkConfig = Field(default=LinkConfig(), description="Link配置")
     distance_RT: KDDistanceRTConfig = Field(default=KDDistanceRTConfig(), description="RT距离配置")
@@ -196,11 +212,11 @@ class FeatureGroupingAlgorithmKDConfig(OpenMSMethodConfig):
         default=KDDistanceIntensityConfig(), description="强度距离配置"
     )
     LOWESS: LOWESSConfig = Field(default=LOWESSConfig(), description="LOWESS配置")
-    
+
 class ULBDistanceRTConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_RT"
-    
+
     max_difference: float = Field(
         default=100.0, ge=0.0, description="永远不配对RT距离大于max_difference的特征"
     )
@@ -212,9 +228,9 @@ class ULBDistanceRTConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="RT距离的权重")
 
 class ULBDistanceMZConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_MZ"
-    
+
     max_difference: float = Field(
         default=0.3, ge=0.0, description="永远不配对m/z距离大于max_difference的特征"
     )
@@ -227,9 +243,9 @@ class ULBDistanceMZConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=1.0, ge=0.0, description="m/z距离的权重")
 
 class ULBDistanceIntensityConfig(OpenMSMethodParamWrapper):
-    
+
     wrapper_name = "distance_intensity"
-    
+
     exponent: float = Field(
         default=1.0,
         ge=0.0,
@@ -238,13 +254,15 @@ class ULBDistanceIntensityConfig(OpenMSMethodParamWrapper):
     weight: float = Field(default=0.0, ge=0.0, description="强度距离的权重")
     log_transform: Literal["enabled", "disabled"] = Field(
         default="disabled",
-        description="是否对强度进行对数变换，如果禁用，d = |int_f2 - int_f1| / int_max。如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
+        description="是否对强度进行对数变换，\
+            如果禁用，d = |int_f2 - int_f1| / int_max。\
+            如果启用，d = |log(int_f2 + 1) - log(int_f1 + 1)| / log(int_max + 1))",
     )
 
 class FeatureGroupingAlgorithmUnlabeledConfig(OpenMSMethodConfig):
-    
-    openms_method: ClassVar[Type[oms.FeatureGroupingAlgorithmUnlabeled]] = oms.FeatureGroupingAlgorithmUnlabeled
-    
+
+    openms_method: ClassVar[type[oms.FeatureGroupingAlgorithmUnlabeled]] = oms.FeatureGroupingAlgorithmUnlabeled
+
     second_nearest_gap: float = Field(
         default=2.0,
         ge=1.0,
@@ -270,14 +288,17 @@ class FeatureGroupingAlgorithmUnlabeledConfig(OpenMSMethodConfig):
     distance_intensity: ULBDistanceIntensityConfig = Field(
         default=ULBDistanceIntensityConfig(), description="强度距离的参数设置"
     )
-    
+
 class FeatureGroupingAlgorithmLabeledConfig(OpenMSMethodConfig):
-    
-    openms_method: ClassVar[Type[oms.FeatureGroupingAlgorithmLabeled]] = oms.FeatureGroupingAlgorithmLabeled
-    
+
+    openms_method: ClassVar[type[oms.FeatureGroupingAlgorithmLabeled]] = oms.FeatureGroupingAlgorithmLabeled
+
     rt_estimate: Literal["true", "false"] = Field(
         default="true",
-        description="是否估计RT距离和偏差，如果为true，则使用高斯分布拟合RT距离和偏差，如果为false，则使用rt_pair_dist, rt_dev_low和rt_dev_high定义RT距离和偏差，注意：此选项仅适用于具有显著数量的配对数据集！",
+        description="是否估计RT距离和偏差，\
+            如果为true，则使用高斯分布拟合RT距离和偏差，\
+            如果为false，则使用rt_pair_dist, rt_dev_low和rt_dev_high定义RT距离和偏差，\
+            注意：此选项仅适用于具有显著数量的配对数据集！",
     )
     rt_pair_dist: float = Field(default=-20.0, description="RT距离（以秒为单位）")
     rt_dev_low: float = Field(default=15.0, ge=0.0, description="RT偏差的最小值")
@@ -285,20 +306,18 @@ class FeatureGroupingAlgorithmLabeledConfig(OpenMSMethodConfig):
     mz_pair_dists: list[float] = Field(default=[4.0], description="m/z距离（以Th为单位）的最优值")
     mz_dev: float = Field(default=0.05, ge=0.0, description="m/z偏差的最大值")
     mrm: Literal["true", "false"] = Field(default="false", description="是否使用MRM数据")
-    
+
 class FeatureLinkerConfig(ConvertMethodConfig):
-    
+
     configs_type: ClassVar[
-        Dict[
+        dict[
             Literal[
                 "QT","KD","Unlabeled","Labeled"
             ],
-            Union[
-                Type[FeatureGroupingAlgorithmQTConfig],
-                Type[FeatureGroupingAlgorithmKDConfig],
-                Type[FeatureGroupingAlgorithmUnlabeledConfig],
-                Type[FeatureGroupingAlgorithmLabeledConfig],
-            ]
+            type[FeatureGroupingAlgorithmQTConfig] |\
+            type[FeatureGroupingAlgorithmKDConfig] |\
+            type[FeatureGroupingAlgorithmUnlabeledConfig] |\
+            type[FeatureGroupingAlgorithmLabeledConfig]
         ]
     ] = {
         "QT": FeatureGroupingAlgorithmQTConfig,
@@ -306,21 +325,19 @@ class FeatureLinkerConfig(ConvertMethodConfig):
         "Unlabeled": FeatureGroupingAlgorithmUnlabeledConfig,
         "Labeled": FeatureGroupingAlgorithmLabeledConfig,
     }
-    
+
     method_name: Literal[
         "QT","KD","Unlabeled","Labeled"
     ] = Field(default="QT", description="指定使用的特征分组算法")
-    
-    configs: Dict[
+
+    configs: dict[
         Literal[
             "QT","KD","Unlabeled","Labeled"
         ],
-        Union[
-            FeatureGroupingAlgorithmQTConfig,
-            FeatureGroupingAlgorithmKDConfig,
-            FeatureGroupingAlgorithmUnlabeledConfig,
-            FeatureGroupingAlgorithmLabeledConfig,
-        ]
+            FeatureGroupingAlgorithmQTConfig |\
+            FeatureGroupingAlgorithmKDConfig |\
+            FeatureGroupingAlgorithmUnlabeledConfig |\
+            FeatureGroupingAlgorithmLabeledConfig
     ] = Field(
         default={
             "QT": FeatureGroupingAlgorithmQTConfig(),
@@ -329,34 +346,34 @@ class FeatureLinkerConfig(ConvertMethodConfig):
             "Labeled": FeatureGroupingAlgorithmLabeledConfig(),
         }
     )
-    
+
     @property
-    def config(self) -> Union[
-        FeatureGroupingAlgorithmQTConfig,
-        FeatureGroupingAlgorithmKDConfig,
-        FeatureGroupingAlgorithmUnlabeledConfig,
-        FeatureGroupingAlgorithmLabeledConfig,
-    ]:
+    def config(self) -> \
+        FeatureGroupingAlgorithmQTConfig |\
+        FeatureGroupingAlgorithmKDConfig |\
+        FeatureGroupingAlgorithmUnlabeledConfig |\
+        FeatureGroupingAlgorithmLabeledConfig \
+    :
         return self.configs[self.method_name]
-    
+
     @config.setter
-    def config(self, value: Union[
-        FeatureGroupingAlgorithmQTConfig,
-        FeatureGroupingAlgorithmKDConfig,
-        FeatureGroupingAlgorithmUnlabeledConfig,
-        FeatureGroupingAlgorithmLabeledConfig,
-    ]):
+    def config(self, value: \
+        FeatureGroupingAlgorithmQTConfig |\
+        FeatureGroupingAlgorithmKDConfig |\
+        FeatureGroupingAlgorithmUnlabeledConfig |\
+        FeatureGroupingAlgorithmLabeledConfig
+    ):
         self.configs[self.method_name] = value
 
 class FeatureLinker(MSTool):
-    
+
     config_type: FeatureLinkerConfig = FeatureLinkerConfig
     config: FeatureLinkerConfig
-    
-    def __init__(self, config: Optional[FeatureLinkerConfig] = None):
+
+    def __init__(self, config: FeatureLinkerConfig | None = None):
         super().__init__(config)
         self.feature_linker = self.config.config.openms_method()
-        
+
     def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
         consensus_map = oms.ConsensusMap()
         file_descriptions = consensus_map.getColumnHeaders()

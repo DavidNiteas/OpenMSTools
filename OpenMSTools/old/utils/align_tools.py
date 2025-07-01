@@ -1,10 +1,9 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    get_kv_pairs
-)
+from typing import Dict, List, Optional, Tuple, Union
+
 from .async_tools import trio
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms
 from .ms_exp_tools import copy_ms_experiments
-from typing import Optional, Union, List, Dict, Tuple
+
 
 async def align_feature_map_coroutine(
     feature_map:oms.FeatureMap,
@@ -19,7 +18,7 @@ async def align_feature_map_coroutine(
     except RuntimeError as e:
         print(f"Alignment failed for feature map {key}: {e}")
         raise e
-        
+
 async def align_feature_map_step(
     feature_maps:Union[List[oms.FeatureMap],Dict[str,oms.FeatureMap]],
     trafos:Union[List[oms.TransformationDescription],Dict[str,oms.TransformationDescription]],
@@ -29,7 +28,7 @@ async def align_feature_map_step(
         for key,feature_map in get_kv_pairs(feature_maps):
             if trafos[key] is not None:
                 nursery.start_soon(align_feature_map_coroutine, feature_map, trafos[key], process_obj, key)
-                
+
 def align_feature_maps(
     feature_maps:Union[List[oms.FeatureMap],Dict[str,oms.FeatureMap]],
     ref_index:Union[int,str,None],
@@ -60,7 +59,7 @@ async def align_ms_exp_coroutine(
     except RuntimeError as e:
         print(f"Alignment failed for MS experiment {key}: {e}")
         raise e
-    
+
 async def align_ms_exp_step(
     ms_exps:Union[List[oms.MSExperiment],Dict[str,List[oms.MSExperiment]]],
     trafos:Union[List[oms.TransformationDescription],Dict[str,List[oms.TransformationDescription]]],
@@ -69,7 +68,7 @@ async def align_ms_exp_step(
         for key,ms_exp in get_kv_pairs(ms_exps):
             if trafos[key] is not None:
                 nursery.start_soon(align_ms_exp_coroutine, ms_exp, trafos[key], key)
-                
+
 def align_ms_exps(
     ms_exps:Union[List[oms.MSExperiment],Dict[str,List[oms.MSExperiment]]],
     trafos:Union[List[oms.TransformationDescription],Dict[str,List[oms.TransformationDescription]]],
@@ -77,7 +76,7 @@ def align_ms_exps(
     aligned_exps = copy_ms_experiments(ms_exps)
     trio.run(align_ms_exp_step, aligned_exps, trafos)
     return aligned_exps
-        
+
 @InitProcessAndParamObj(
     oms.MapAlignmentAlgorithmPoseClustering,
     defualt_params={

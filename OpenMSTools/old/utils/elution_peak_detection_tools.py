@@ -1,9 +1,8 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    get_kv_pairs
-)
+from typing import Dict, List, Optional, Union
+
 from .async_tools import trio
-from typing import Optional, Union, List, Dict
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms
+
 
 async def elution_peak_detection_coroutine(
     mass_traces:list,
@@ -11,7 +10,7 @@ async def elution_peak_detection_coroutine(
     process_obj:oms.ElutionPeakDetection,
 ):
     process_obj.detectPeaks(mass_traces,mass_traces_deconvol)
-    
+
 async def elution_peak_detection_step(
     mass_traces:Union[List[oms.Kernel_MassTrace],List[List[oms.Kernel_MassTrace]],Dict[str,List[oms.Kernel_MassTrace]]],
     mass_traces_deconvol:Union[list,List[list],Dict[str,list]],

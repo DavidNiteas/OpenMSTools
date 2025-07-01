@@ -1,19 +1,22 @@
-from .data_wrapper import OpenMSDataWrapper
-from pydantic import BaseModel, Field
-from abc import ABC,abstractmethod
-import toml
-import pyopenms as oms
+from abc import ABC, abstractmethod
+from typing import Any, ClassVar
+
 import pandas as pd
+import pyopenms as oms
+import toml
+from pydantic import BaseModel, Field
 from typing_extensions import Self
-from typing import Type, Dict, Any, Union, ClassVar, List
+
+from .data_wrapper import OpenMSDataWrapper
+
 
 class TomlConfig(BaseModel):
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     def to_dict(self):
         return self.model_dump()
-    
+
     @classmethod
     def from_dict(cls, params: dict) -> Self:
         input_params = {}
@@ -23,14 +26,14 @@ class TomlConfig(BaseModel):
             else:
                 input_params[param_name] = params[param_name]
         return cls(**input_params)
-    
+
     def to_toml_string(self) -> str:
         return toml.dumps(self.model_dump())
-    
+
     @classmethod
     def from_toml_string(cls, toml_string: str) -> Self:
         return cls.from_dict(toml.loads(toml_string))
-    
+
     def to_toml(self, path: str):
         with open(path, "w", encoding="utf-8") as f:
             toml.dump(self.model_dump(), f)
@@ -38,54 +41,54 @@ class TomlConfig(BaseModel):
     @classmethod
     def from_toml(cls, path: str) -> Self:
         return cls.from_dict(toml.load(path))
-    
+
 class OpenMSParam(ABC):
-    
+
     @abstractmethod
     def size(self) -> int:
         pass
-    
+
     @abstractmethod
-    def keys(self) -> List[bytes]:
+    def keys(self) -> list[bytes]:
         pass
-    
+
     @abstractmethod
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         pass
-    
+
     @abstractmethod
     def __getitem__(self, key: bytes) -> Any:
         pass
-    
+
     @abstractmethod
-    def descriptions(self) -> List[str]:
+    def descriptions(self) -> list[str]:
         pass
-    
+
     @abstractmethod
     def getDescription(self,key:bytes) -> str:
         pass
-    
+
 class OpenMSMethod(ABC):
-    
+
     @abstractmethod
     def getParameters(self) -> OpenMSParam:
         pass
-    
+
     @abstractmethod
     def getDefaults(self) -> OpenMSParam:
         pass
-    
+
 class OpenMSMethodParam(ABC, TomlConfig):
-    
+
     @abstractmethod
-    def dump2openms(self) -> Dict[str, Any]:
+    def dump2openms(self) -> dict[str, Any]:
         pass
-    
+
 class OpenMSMethodParamWrapper(OpenMSMethodParam):
-    
+
     wrapper_name: ClassVar[str]
-    
-    def dump2openms(self) -> Dict[str, Any]:
+
+    def dump2openms(self) -> dict[str, Any]:
         param_dict = {}
         for field_name in self.model_fields:
             field_data = getattr(self, field_name)
@@ -97,9 +100,9 @@ class OpenMSMethodParamWrapper(OpenMSMethodParam):
         return param_dict
 
 class OpenMSMethodConfig(ABC, TomlConfig):
-    
-    openms_method: ClassVar[Type[OpenMSMethod]]
-    
+
+    openms_method: ClassVar[type[OpenMSMethod]]
+
     @property
     def param(self) -> OpenMSParam:
         param = oms.Param()
@@ -112,7 +115,7 @@ class OpenMSMethodConfig(ABC, TomlConfig):
             else:
                 param.setValue(key, value)
         return param
-    
+
     @property
     def param_info(self) -> pd.DataFrame:
         method = self.openms_method()
@@ -140,14 +143,14 @@ class OpenMSMethodConfig(ABC, TomlConfig):
         infos = pd.DataFrame(infos)
         infos.index.name = "param_name"
         return infos
-    
+
 class ConvertMethodConfig(TomlConfig):
-    
-    configs_type: ClassVar[Dict[str, TomlConfig]] = {}
-    
+
+    configs_type: ClassVar[dict[str, TomlConfig]] = {}
+
     method_name: str
-    configs: Dict[str, TomlConfig] = Field(default={})
-    
+    configs: dict[str, TomlConfig] = Field(default={})
+
     def __init__(self,*args, **kwargs):
         super().__init__(*args, **kwargs)
         for config_name, config_type in self.configs_type.items():
@@ -158,7 +161,7 @@ class ConvertMethodConfig(TomlConfig):
                     self.configs[config_name] = config_type.from_dict(self.configs[config_name])
                 else:
                     self.configs[config_name] = config_type()
-    
+
     @classmethod
     def from_dict(cls, params: dict) -> Self:
         input_params = {"method_name": params["method_name"]}
@@ -178,11 +181,11 @@ class ConvertMethodConfig(TomlConfig):
                     else:
                         input_params[meta_name] = params[meta_name]
         return cls(**input_params)
-    
+
     @property
     def config(self) -> TomlConfig:
         return self.configs[self.method_name]
-    
+
     @config.setter
     def config(self, value: TomlConfig):
         self.configs[self.method_name] = value
@@ -195,31 +198,38 @@ class ConvertMethodConfig(TomlConfig):
         else:
             return self.configs[key]
 
-    def __setitem__(self, key: str, value: Union[TomlConfig, str]):
+    def __setitem__(self, key: str, value: TomlConfig | str):
         if key == "method_name":
             self.method_name = value
         elif key == "config":
             self.configs[key] = value
         else:
             self.configs[key] = value
-    
+
 class MSToolConfig(TomlConfig):
-    
+
     pass
 
 class MSTool(ABC):
-    
-    config_type: Union[Type[MSToolConfig],Type[ConvertMethodConfig],Type[OpenMSMethodConfig],Type[TomlConfig]]
-    
+
+    config_type:type[MSToolConfig] |\
+                type[ConvertMethodConfig] |\
+                type[OpenMSMethodConfig] |\
+                type[TomlConfig]
+
     def __init__(
         self,
-        config: Union[MSToolConfig,ConvertMethodConfig,OpenMSMethodConfig,TomlConfig,None] = None,
+        config: MSToolConfig |\
+                ConvertMethodConfig |\
+                OpenMSMethodConfig |\
+                TomlConfig |\
+                None = None,
     ):
         if not isinstance(config, self.config_type):
             self.config = self.config_type()
         else:
             self.config = config
-    
+
     @abstractmethod
     def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
         pass

@@ -1,16 +1,25 @@
-from ..utils.base_tools import oms
-from .structs_tools import (
-    AsyncBase,ToleranceBase,ProgressManager,
-    inverse_dict,unzip_results,ppm2da,id_dict_to_str
-)
+from collections.abc import Hashable
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Hashable, Union, List, Optional, Callable, Literal
+
+from ..utils.base_tools import oms
+from .structs_tools import (
+    AsyncBase,
+    ProgressManager,
+    ToleranceBase,
+    id_dict_to_str,
+    inverse_dict,
+    ppm2da,
+    unzip_results,
+)
+
 
 class MSExperiments(AsyncBase,ToleranceBase):
-    
+
     def __init__(
-        self, 
+        self,
         exps: Union[oms.MSExperiment, List[oms.MSExperiment], Dict[str, oms.MSExperiment]],
         precursor_search_tolerance: Tuple[float,float] = (5.0,5.0),
         precursor_search_tolerance_type: Literal['ppm','Da'] = 'ppm',
@@ -34,10 +43,10 @@ class MSExperiments(AsyncBase,ToleranceBase):
         self.mz_tolerance = mz_tolerance
         self.rt_tolerance = rt_tolerance
         self.mz_tolerance_type = mz_tolerance_type
-        
+
     def init_spec_uid_access_map(self):
         self.spec_uid_access_map = inverse_dict(unzip_results(self.SPEC_UIDs()))
-    
+
     def init_ms2_search_info(self):
         # self.ms_access = np.array(list(self.SPEC_UID_ACCESS_MAP.values()),dtype=object)
         all_PIs = self.precursor_mzs()
@@ -58,39 +67,39 @@ class MSExperiments(AsyncBase,ToleranceBase):
             self.ms2_PI[exp_id] = np.array(self.ms2_PI[exp_id])
             self.ms2_RT[exp_id] = np.array(self.ms2_RT[exp_id])
         print()
-        
+
     @property
     def EXPS(self) -> Dict[Hashable, oms.MSExperiment]:
         return self.exps
-    
+
     @property
     def SPEC_UID_ACCESS_MAP(self) -> Dict[Tuple[Hashable, int], str]:
         return self.spec_uid_access_map
-    
+
     @property
     def PathTag(self,) -> Dict[Hashable, oms.MSExperiment]:
         return self.EXPS
-    
+
     @property
     def PathTagLenFunc(self) -> Callable[[Hashable], int]:
         return self.EXP_len
-    
+
     # @property
     # def MSAccess(self) -> np.ndarray:
     #     return self.ms_access
-    
+
     @property
     def MS2PIs(self) -> Dict[Hashable, np.ndarray]:
         return self.ms2_PI
-    
+
     @property
     def MS2RTs(self) -> Dict[Hashable, np.ndarray]:
         return self.ms2_RT
-    
+
     @property
     def MS2Access(self) -> Dict[Hashable, np.ndarray]:
         return self.ms2_access
-    
+
     def search_ms2(
         self,exp_id:Hashable,mz:float,RT:float,
     ) -> Optional[List[Tuple[Hashable,int]]]:
@@ -104,7 +113,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return access_path
         else:
             return None
-        
+
     def search_ms2_by_range(
         self,
         exp_id: Hashable,
@@ -120,27 +129,27 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return access_path
         else:
             return None
-    
+
     def __len__(self) -> int:
         return len(self.exps)
-    
+
     def EXP(self, exp_id: Hashable) -> Optional[oms.MSExperiment]:
         return self.EXPS.get(exp_id, None)
-    
+
     def EXP_len(self, exp_id: Hashable) -> Optional[int]:
         exp = self.EXP(exp_id)
         if exp is not None:
             return exp.size()
         else:
             return None
-    
+
     def SPECS(self, exp_id: Hashable) -> Optional[List[oms.MSSpectrum]]:
         exp = self.EXP(exp_id)
         if exp is not None:
             return exp.getSpectra()
         else:
             return None
-        
+
     def SPEC(self, access_path: Tuple[Hashable, int]) -> Optional[oms.MSSpectrum]:
         exp_id, spec_id = access_path
         exp = self.EXP(exp_id)
@@ -148,7 +157,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return exp.getSpectrum(spec_id)
         else:
             return None
-        
+
     def __getitem__(self, access_path: Tuple[Hashable, int]) -> oms.MSSpectrum:
         exp_id, spec_id = access_path
         exp = self.EXPS[exp_id]
@@ -156,27 +165,27 @@ class MSExperiments(AsyncBase,ToleranceBase):
         if spec is None:
             raise KeyError(f"Spectrum {spec_id} not found in experiment {exp_id}.")
         return spec
-        
+
     def SPEC_ID(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         ids_dict = self.SpecIDDict(access_path)
         if ids_dict is not None:
             return id_dict_to_str(ids_dict)
         else:
             return None
-    
+
     @AsyncBase.use_coroutine
     def SPEC_ID_coroutine(
         self,
         access_path: Tuple[Hashable, int],
     ) -> None:
         return self.SPEC_ID(access_path)
-    
+
     def SPEC_IDs(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -187,25 +196,25 @@ class MSExperiments(AsyncBase,ToleranceBase):
             self.SPEC_ID_coroutine,
             access_path,
         )
-        
+
     def SPEC_UID(self, access_path: Tuple[Hashable, int]) -> Optional[str]:
         exp_id, spec_index = access_path
         spec_id = self.SPEC_ID(access_path)
         if spec_id is not None:
-            return "{}:{}".format(exp_id, spec_id)
+            return f"{exp_id}:{spec_id}"
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SPEC_UID_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SPEC_UID(access_path)
-    
+
     def SPEC_UIDs(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -216,24 +225,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
             self.SPEC_UID_coroutine,
             access_path,
         )
-        
+
     def SpecPeaksTIC(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.calculateTIC()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecPeaksTIC_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecPeaksTIC(access_path)
-    
+
     def SpecPeaksTICs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -241,12 +250,12 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecPeaksTIC_coroutine, access_path)
-        
+
     def findHighestInWindow(
-        self, 
-        access_path: Tuple[Hashable, int], 
+        self,
+        access_path: Tuple[Hashable, int],
         mz:float,
-        tolerance_left: float = 1.0, 
+        tolerance_left: float = 1.0,
         tolerance_right: float = 1.0,
         tolerance_unit: Literal['ppm', 'Da'] = 'ppm',
     ) -> Optional[int]:
@@ -258,7 +267,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return spec.findHighestInWindow(mz, tolerance_left, tolerance_right)
         else:
             return None
-        
+
     def findNearest(
         self,
         access_path: Tuple[Hashable, int],
@@ -282,7 +291,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
                 return spec.findNearest(mz, tolerance_or_left, tolerance_right)
         else:
             return None
-    
+
     def DriftTime(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
@@ -293,17 +302,17 @@ class MSExperiments(AsyncBase,ToleranceBase):
                 return dt
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def DriftTime_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.DriftTime(access_path)
 
     def DriftTimes(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -311,24 +320,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.DriftTime_coroutine, access_path)
-        
+
     def MSLevel(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMSLevel()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def MSLevel_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.MSLevel(access_path)
-        
+
     def MSLevels(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -336,24 +345,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, int]]:
         return self.run_coroutine(self.MSLevel_coroutine, access_path)
-        
+
     def SpecMaxIntensity(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMaxIntensity()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecMaxIntensity_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecMaxIntensity(access_path)
-    
+
     def SpecMaxIntensities(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -361,24 +370,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecMaxIntensity_coroutine, access_path)
-        
+
     def SpecMaxMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMaxMZ()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecMaxMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecMaxMZ(access_path)
-        
+
     def SpecMaxMZS(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -386,24 +395,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecMaxMZ_coroutine, access_path)
-        
+
     def SpecMinIntensity(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMinIntensity()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecMinIntensity_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecMinIntensity(access_path)
-        
+
     def SpecMinIntensities(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -411,24 +420,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecMinIntensity_coroutine, access_path)
-        
+
     def SpecMinMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMinMZ()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecMinMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecMinMZ(access_path)
-        
+
     def SpecMinMZS(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -436,24 +445,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecMinMZ_coroutine, access_path)
-        
+
     def SpecTIC(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMetaValue('total ion current')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecTIC_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecTIC(access_path)
-        
+
     def SpecTICs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -461,24 +470,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecTIC_coroutine, access_path)
-        
+
     def SpecBasePeakMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMetaValue('base peak m/z')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecBasePeakMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecBasePeakMZ(access_path)
-        
+
     def SpecBasePeakMZS(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -486,24 +495,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecBasePeakMZ_coroutine, access_path)
-        
+
     def SpecBasePeakIntensity(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMetaValue('base peak intensity')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecBasePeakIntensity_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecBasePeakIntensity(access_path)
-        
+
     def SpecBasePeakIntensities(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -511,24 +520,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecBasePeakIntensity_coroutine, access_path)
-        
+
     def SpecLowestObservedMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMetaValue('lowest observed m/z')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecLowestObservedMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecLowestObservedMZ(access_path)
-        
+
     def SpecLowestObservedMZS(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -536,24 +545,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecLowestObservedMZ_coroutine, access_path)
-        
+
     def SpecHighestObservedMZ(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getMetaValue('highest observed m/z')
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecHighestObservedMZ_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecHighestObservedMZ(access_path)
-        
+
     def SpecHighestObservedMZS(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -561,9 +570,9 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecHighestObservedMZ_coroutine, access_path)
-        
+
     def MassCondition(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
         re_type: Literal['str', 'dict'] = 'dict',
     ) -> Optional[Dict[
@@ -609,21 +618,21 @@ class MSExperiments(AsyncBase,ToleranceBase):
                     }
                 return conditions
         return None
-    
+
     @AsyncBase.use_coroutine
     def MassCondition_coroutine(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
         re_type: Literal['str', 'dict'] = 'dict',
     ) -> None:
         return self.MassCondition(access_path, re_type)
-        
+
     def MassConditions(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -643,31 +652,31 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ],str
     ]]]:
         return self.run_coroutine(self.MassCondition_coroutine, access_path, re_type)
-    
+
     # def SpecOriginalRT(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
     #     spec = self.SPEC(access_path)
     #     if spec is not None:
     #         return spec.getMetaValue('original_rt')
     #     else:
     #         return None
-        
+
     def SpecRT(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getRT()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecRT_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecRT(access_path)
-        
+
     def SpecRTs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -675,9 +684,9 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.SpecRT_coroutine, access_path)
-        
+
     def SpecIDDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Optional[
         Dict[
@@ -699,20 +708,20 @@ class MSExperiments(AsyncBase,ToleranceBase):
                     ids[key] = int(value)
                 return ids
         return None
-    
+
     @AsyncBase.use_coroutine
     def SpecIDDict_coroutine(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> None:
         return self.SpecIDDict(access_path)
-        
+
     def SpecIDsDict(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -726,7 +735,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ],int
     ]]]:
         return self.run_coroutine(self.SpecIDDict_coroutine, access_path)
-    
+
     def is_centroid_spec(
         self,
         access_path: Tuple[Hashable, int],
@@ -736,10 +745,10 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return bool(spec.getType())
         else:
             return None
-        
+
     def SpecDataFrame(
-        self, 
-        access_path: Tuple[Hashable, int], 
+        self,
+        access_path: Tuple[Hashable, int],
         export_meta_values: bool = True,
     ) -> Optional[pd.DataFrame]:
         spec = self.SPEC(access_path)
@@ -747,7 +756,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return oms._dataframes._MSSpectrumDF.get_df(spec,export_meta_values)
         else:
             return None
-        
+
     def SpecPeaks(self, access_path: Tuple[Hashable, int]) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         spec = self.SPEC(access_path)
         if spec is not None:
@@ -755,17 +764,17 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return mzs, intensities
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def SpecPeaks_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.SpecPeaks(access_path)
-        
+
     def SpecPeaksArrays(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -773,7 +782,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, Tuple[np.ndarray, np.ndarray]]]:
         return self.run_coroutine(self.SpecPeaks_coroutine, access_path)
-        
+
     def is_sorted_spec(
         self,
         access_path: Tuple[Hashable, int],
@@ -783,24 +792,24 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return spec.isSorted()
         else:
             return None
-        
+
     def PeakCount(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.size()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def PeakCount_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.PeakCount(access_path)
-        
+
     def PeakCounts(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -808,38 +817,38 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, int]]:
         return self.run_coroutine(self.PeakCount_coroutine, access_path)
-        
+
     def Precursors(self, access_path: Tuple[Hashable, int]) -> Optional[List[oms.Precursor]]:
         spec = self.SPEC(access_path)
         if spec is not None:
             return spec.getPrecursors()
         else:
             return None
-        
+
     def Precursor(self, access_path: Tuple[Hashable, int, int]) -> Optional[oms.Precursor]:
         precursors = self.Precursors(access_path)
         if isinstance(precursors, list) and len(precursors) > 0:
             return precursors[0]
         else:
             return None
-    
+
     def precursor_mz(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         precursor = self.Precursor(access_path)
         if precursor is not None:
             return precursor.getMZ()
         else:
             return None
-        
+
     @AsyncBase.use_coroutine
     def precursor_mz_coroutine(self, access_path: Tuple[Hashable, int]) -> None:
         return self.precursor_mz(access_path)
-        
+
     def precursor_mzs(
-        self, 
+        self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -847,14 +856,14 @@ class MSExperiments(AsyncBase,ToleranceBase):
         ] = None,
     ) -> Dict[Hashable, Dict[int, float]]:
         return self.run_coroutine(self.precursor_mz_coroutine, access_path)
-    
+
     def precursor_intensity(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         precursor = self.Precursor(access_path)
         if precursor is not None:
             return precursor.getIntensity()
         else:
             return None
-    
+
     def precursor_charge(self, access_path: Tuple[Hashable, int]) -> Optional[int]:
         precursor = self.Precursor(access_path)
         if precursor is not None:
@@ -863,7 +872,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
             return None
 
     def precursor_ref_ids(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Optional[Dict[
         Literal['controllerType','controllerNumber','scan'],int
@@ -882,16 +891,16 @@ class MSExperiments(AsyncBase,ToleranceBase):
                 return precursor_ref
         else:
             return None
-        
+
     def collision_energy(self, access_path: Tuple[Hashable, int]) -> Optional[float]:
         precursor = self.Precursor(access_path)
         if precursor is not None:
             return float(precursor.getMetaValue('collision energy'))
         else:
             return None
-        
+
     def PrecursorDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> None:
         precursor_dict = {}
@@ -917,20 +926,20 @@ class MSExperiments(AsyncBase,ToleranceBase):
             precursor_dict['charge'] = self.precursor_charge(access_path)
             precursor_dict['collision_energy'] = self.collision_energy(access_path)
         return precursor_dict
-    
+
     @AsyncBase.use_coroutine
     def PrecursorDict_coroutine(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> None:
         return self.PrecursorDict(access_path)
-    
+
     def PrecursorsDict(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -944,9 +953,9 @@ class MSExperiments(AsyncBase,ToleranceBase):
             self.PrecursorDict_coroutine,
             access_path,
         )
-        
+
     def SpecDict(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> Dict[
         Literal[
@@ -983,20 +992,20 @@ class MSExperiments(AsyncBase,ToleranceBase):
             **precursor_dict,
         }
         return spec_dict
-    
+
     @AsyncBase.use_coroutine
     def SpecDict_coroutine(
-        self, 
+        self,
         access_path: Tuple[Hashable, int],
     ) -> None:
         return self.SpecDict(access_path)
-    
+
     def SpecsDict(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -1016,13 +1025,13 @@ class MSExperiments(AsyncBase,ToleranceBase):
             self.SpecDict_coroutine,
             access_path,
         )
-        
+
     def SpecsDataFrame(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,
@@ -1038,7 +1047,7 @@ class MSExperiments(AsyncBase,ToleranceBase):
         specs_df.drop(['cleavage_info'],axis=1,inplace=True)
         specs_df.index.name = 'spec_uid'
         return specs_df
-    
+
     @staticmethod
     def split_specs_dataframe_by_mslevel(specs_df:pd.DataFrame) -> Dict[int,pd.DataFrame]:
         ms_level_dfs = {}
@@ -1046,13 +1055,13 @@ class MSExperiments(AsyncBase,ToleranceBase):
             ms_level = int(ms_level_df['ms_level'].iloc[0].strip('ms'))
             ms_level_dfs[ms_level] = ms_level_df.dropna(axis=1, how='all').drop(columns=['ms_level'],inplace=False)
         return ms_level_dfs
-    
+
     def SpecsDataFrames(
         self,
         access_path: Union[
             List[Tuple[Hashable, int]],
             Tuple[
-                Union[List[Hashable],Hashable,None], 
+                Union[List[Hashable],Hashable,None],
                 Union[List[int],int,None]
             ],
             Hashable,

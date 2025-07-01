@@ -1,8 +1,7 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    get_kv_pairs
-)
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Dict, List, Optional, Union
+
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms
+
 
 @InitProcessAndParamObj(
     oms.FeatureGroupingAlgorithmQT,

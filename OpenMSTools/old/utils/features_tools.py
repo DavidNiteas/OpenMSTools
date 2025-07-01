@@ -1,9 +1,8 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    get_kv_pairs
-)
+from typing import Dict, List, Optional, Tuple, Union
+
 from .async_tools import trio
-from typing import Optional, Union, List, Dict, Tuple
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms
+
 
 async def feature_finding_metabo_coroutine(
     mass_traces_deconvol:List[oms.Kernel_MassTrace],
@@ -12,8 +11,8 @@ async def feature_finding_metabo_coroutine(
     process_obj:oms.FeatureFindingMetabo,
 ):
     process_obj.run(mass_traces_deconvol, feature_map, chromatograms)
-    feature_map.setUniqueIds() 
-    
+    feature_map.setUniqueIds()
+
 async def feature_finding_metabo_step(
     mass_traces_deconvol:Union[List[oms.Kernel_MassTrace],List[List[oms.Kernel_MassTrace]],Dict[str,List[oms.Kernel_MassTrace]]],
     feature_maps:Union[List[oms.FeatureMap],Dict[str,oms.FeatureMap]],

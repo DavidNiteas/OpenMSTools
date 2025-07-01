@@ -21,3 +21,19 @@ pandas = "*"
 dask = "*"
 trio = "*"
 rich = "*"
+
+[tool.ruff]
+line-length = 120
+src = ["OpenMSTools"]
+select = [
+  "E",   # PEP8
+  "W",   # PEP8
+  "I",   # 导入顺序
+  "F",   # 基础检查
+  "UP",  # 新版本兼容性
+  "PERF",  # 性能优化
+]
+ignore = ["E741"]
+exclude = [
+  "./OpenMSTools/old"
+]

@@ -1,10 +1,8 @@
-from .base_tools import (
-    oms,InitProcessAndParamObj,
-    oms_exps,
-    get_kv_pairs
-)
+from typing import Dict, List, Optional, Union
+
 from .async_tools import trio
-from typing import Optional, Union, List, Dict
+from .base_tools import InitProcessAndParamObj, get_kv_pairs, oms, oms_exps
+
 
 async def mass_trace_detection_coroutine(
     ms_exp:oms.MSExperiment,
@@ -14,7 +12,7 @@ async def mass_trace_detection_coroutine(
 ):
     process_obj.run(ms_exp, mass_traces, max_traces)
     # process_obj.run(ms_exp, mass_traces)
-    
+
 async def mass_trace_detection_step(
     ms_exps:oms_exps,
     mass_traces:Union[List[list],Dict[str,list]],
