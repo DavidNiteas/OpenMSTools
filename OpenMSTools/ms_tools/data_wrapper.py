@@ -25,18 +25,6 @@ def load_exp_file(file_path: str | Path) -> tuple[str, oms.MSExperiment]:
         )
     return exp_name, exp
 
-class XICMap(BaseModel):
-
-    model_config = ConfigDict({"arbitrary_types_allowed": True})
-
-    @classmethod
-    def from_oms(
-        cls,
-        tic_chromatogram: oms.MSChromatogram,
-        peak_chromatograms: list[list[oms.MSChromatogram]],
-    ) -> XICMap:
-        pass
-
 class ConsensusMap(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
