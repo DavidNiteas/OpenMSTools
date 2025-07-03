@@ -115,3 +115,14 @@ class FeatureMap(BaseModel):
         hulls.index = hulls.index.map(lambda x: f"{exp_name}::{x}")
         hulls.index.name = "hull_id"
         return cls(feature_info=feature_info, hulls=hulls)
+
+    def get_oms_feature_map(self) -> oms.FeatureMap:
+        feature_map = oms.FeatureMap()
+        for feature_id, feature_row in self.feature_info.iterrows():
+            feature = oms.Feature()
+            feature.setUniqueId(int(feature_id.split("::")[1]))
+            feature.setMZ(feature_row["mz"])
+            feature.setRT(feature_row["RT"])
+            feature.setIntensity(feature_row["intensity"])
+            feature_map.push_back(feature)
+        return feature_map

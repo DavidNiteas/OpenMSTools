@@ -25,14 +25,6 @@ def load_exp_file(file_path: str | Path) -> tuple[str, oms.MSExperiment]:
         )
     return exp_name, exp
 
-class ConsensusMap(BaseModel):
-
-    model_config = ConfigDict({"arbitrary_types_allowed": True})
-
-    @classmethod
-    def from_oms(cls, consensus_map: oms.ConsensusMap) -> ConsensusMap:
-        pass
-
 class OpenMSDataWrapper(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
