@@ -4,7 +4,7 @@ import dask.bag as db
 import pyopenms as oms
 from pydantic import Field
 
-from .ABCs import MSTool, OpenMSDataWrapper, OpenMSMethodConfig
+from ..ABCs import MSTool, OpenMSDataWrapper, OpenMSMethodConfig
 
 
 class SpectrumNormalizerConfig(OpenMSMethodConfig):

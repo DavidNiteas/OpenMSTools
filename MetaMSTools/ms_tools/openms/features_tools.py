@@ -5,7 +5,7 @@ import dask.bag as db
 import pyopenms as oms
 from pydantic import Field
 
-from .ABCs import (
+from ..ABCs import (
     MSTool,
     MSToolConfig,
     OpenMSDataWrapper,

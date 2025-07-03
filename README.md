@@ -1,2 +1,2 @@
 # OpenMSTools
-A re-packaging of OpenMS based on the pyOpenMS library, providing a more user-friendly preprocessing toolkit for mass spectrometry raw data oriented towards metabolomics and small-molecule mass spectrometry.
+面向代谢组学的质谱数据处理工具包，为用户提供代谢组学质谱数据的特征分析与定量的解决方案。

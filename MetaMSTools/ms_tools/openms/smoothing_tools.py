@@ -3,7 +3,7 @@ from typing import ClassVar, Optional
 import dask.bag as db
 import pyopenms as oms
 
-from .ABCs import MSTool, OpenMSDataWrapper, OpenMSMethodConfig
+from ..ABCs import MSTool, OpenMSDataWrapper, OpenMSMethodConfig
 
 
 class TICSmootherConfig(OpenMSMethodConfig):

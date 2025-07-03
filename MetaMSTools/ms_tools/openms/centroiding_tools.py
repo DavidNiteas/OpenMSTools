@@ -5,7 +5,7 @@ import pyopenms as oms
 from pydantic import Field, model_validator
 from typing_extensions import Self
 
-from .ABCs import (
+from ..ABCs import (
     MSTool,
     OpenMSDataWrapper,
     OpenMSMethodConfig,

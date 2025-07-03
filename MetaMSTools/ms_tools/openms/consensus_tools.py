@@ -3,7 +3,7 @@ from typing import ClassVar, Literal
 import pyopenms as oms
 from pydantic import Field
 
-from .ABCs import (
+from ..ABCs import (
     ConvertMethodConfig,
     MSTool,
     OpenMSDataWrapper,

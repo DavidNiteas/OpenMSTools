@@ -9,6 +9,7 @@ from .spectrums import SpectrumMap
 
 
 def link_ms2_to_feature(feature_hulls: pd.DataFrame,spectrum_map: SpectrumMap) -> list[str]:
+
     spectrum_id_list = []
     for mz_start,rt_start,mz_end,rt_end in zip(
         feature_hulls['MZstart'],
@@ -25,7 +26,8 @@ def link_ms2_and_feature_map(
     feature_map: FeatureMap,
     spectrum_map: SpectrumMap,
     key_id: Literal["feature","spectrum"] = "feature",
-) -> pd.Series[str | list[str]]:
+) -> pd.Series:
+
     feature_id_bag = db.from_sequence(
         zip(feature_map.feature_info.index, feature_map.feature_info['hull_num'])
     )

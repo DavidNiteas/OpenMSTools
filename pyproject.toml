@@ -3,14 +3,14 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "OpenMSTools"
+name = "MetaMSTools"
 version = "0.1.0"
 description = "A re-packaging of OpenMS based on the pyOpenMS library..."
 authors = ["David Niteas <david.ql.d@foxmail.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [
-    { include = "OpenMSTools" }
+    { include = "MetaMSTools" }
 ]
 
 [tool.poetry.dependencies]
@@ -24,7 +24,7 @@ rich = "*"
 
 [tool.ruff]
 line-length = 120
-src = ["OpenMSTools"]
+src = ["MetaMSTools"]
 select = [
   "E",   # PEP8
   "W",   # PEP8
@@ -34,6 +34,3 @@ select = [
   "PERF",  # 性能优化
 ]
 ignore = ["E741"]
-exclude = [
-  "./OpenMSTools/old"
-]
