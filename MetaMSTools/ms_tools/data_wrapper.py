@@ -57,3 +57,7 @@ class OpenMSDataWrapper(BaseModel):
                 max_feature_num = feature_map.size()
                 max_feature_map = feature_map
         self.ref_feature_for_align = max_feature_map
+
+class MetaMSDataWrapper(BaseModel):
+
+    model_config = ConfigDict({"arbitrary_types_allowed": True})

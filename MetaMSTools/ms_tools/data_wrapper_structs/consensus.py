@@ -48,7 +48,7 @@ class ConsensusMap(BaseModel):
             feature_consensus_mapping=feature_consensus_mapping
         )
 
-    def as_oms_feature_map(self) -> oms.FeatureMap:
+    def get_oms_feature_map(self) -> oms.FeatureMap:
         feature_map = oms.FeatureMap()
         for i,row in self.consensus_df.iterrows():
             feature = oms.Feature()

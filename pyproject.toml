@@ -5,7 +5,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 name = "MetaMSTools"
 version = "0.1.0"
-description = "A re-packaging of OpenMS based on the pyOpenMS library..."
+description = "面向代谢组学的质谱数据分析工具包"
 authors = ["David Niteas <david.ql.d@foxmail.com>"]
 license = "MIT"
 readme = "README.md"
