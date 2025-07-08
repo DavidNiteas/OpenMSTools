@@ -5,12 +5,10 @@ import pyopenms as oms
 from pydantic import Field, model_validator
 from typing_extensions import Self
 
-from ..ABCs import (
-    MSTool,
-    OpenMSDataWrapper,
-    OpenMSMethodConfig,
-    OpenMSMethodParamWrapper,
-)
+from ...snaps.MassDataModule.data_module.configs import OpenMSMethodConfig
+from ...snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ...snaps.MassDataModule.data_module.openms_module import OpenMSMethodParamWrapper
+from ..ABCs import MSTool
 
 
 class SignalToNoiseConfig(OpenMSMethodParamWrapper):

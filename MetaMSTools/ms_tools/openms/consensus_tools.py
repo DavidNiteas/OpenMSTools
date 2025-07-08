@@ -3,13 +3,10 @@ from typing import ClassVar, Literal
 import pyopenms as oms
 from pydantic import Field
 
-from ..ABCs import (
-    ConvertMethodConfig,
-    MSTool,
-    OpenMSDataWrapper,
-    OpenMSMethodConfig,
-    OpenMSMethodParamWrapper,
-)
+from ...snaps.MassDataModule.data_module.configs import ConvertMethodConfig, OpenMSMethodConfig
+from ...snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ...snaps.MassDataModule.data_module.openms_module import OpenMSMethodParamWrapper
+from ..ABCs import MSTool
 
 
 class QTDistanceRTConfig(OpenMSMethodParamWrapper):

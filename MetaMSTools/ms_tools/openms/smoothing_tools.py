@@ -3,7 +3,9 @@ from typing import ClassVar, Optional
 import dask.bag as db
 import pyopenms as oms
 
-from ..ABCs import MSTool, OpenMSDataWrapper, OpenMSMethodConfig
+from ...snaps.MassDataModule.data_module.configs import OpenMSMethodConfig
+from ...snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ..ABCs import MSTool
 
 
 class TICSmootherConfig(OpenMSMethodConfig):

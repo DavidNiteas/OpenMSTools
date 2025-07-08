@@ -5,13 +5,10 @@ import dask.bag as db
 import pyopenms as oms
 from pydantic import Field
 
-from ..ABCs import (
-    MSTool,
-    MSToolConfig,
-    OpenMSDataWrapper,
-    OpenMSMethodConfig,
-    OpenMSMethodParam,
-)
+from ...snaps.MassDataModule.data_module.configs import OpenMSMethodConfig
+from ...snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ...snaps.MassDataModule.data_module.openms_module import OpenMSMethodParam
+from ..ABCs import MSTool, MSToolConfig
 
 
 class MassTraceDetectionConfig(OpenMSMethodConfig):
