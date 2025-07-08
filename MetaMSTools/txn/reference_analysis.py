@@ -1,18 +1,19 @@
+import os
 from typing import Literal
 
+import dask.bag as db
 from pydantic import Field
 
 from ..ms_tools import (
-    ConsensusMap,
     FeatureFinder,
     FeatureFinderConfig,
     FeatureLinker,
     FeatureLinkerConfig,
-    FeatureMap,
     MSTool,
     MSToolConfig,
-    OpenMSDataWrapper,
 )
+from ..snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ..snaps.MassDataModule.data_module.experiment_module import ConsensusMap, FeatureMap
 
 
 class ReferenceFeatureFinderConfig(MSToolConfig):
@@ -33,20 +34,45 @@ class ReferenceFeatureFinderConfig(MSToolConfig):
             `max_size_feature`表示使用特征数最多的样本中的特征图 \
             如果只有一个参考样本，则无论mode如何，都会使用该样本的特征",
     )
+    worker_type: Literal["processes", "threads", "debug"] = Field(
+        default="processes",
+        description="使用的工作类型，\
+            `processes`表示使用多进程，\
+            `threads`表示使用多线程 \
+            `debug`表示使用debug模式，仅用于调试"
+    )
+    num_workers: int = Field(
+        default=os.cpu_count(),
+        description="并行计算的线程数/进程数"
+    )
 
 class ReferenceFeatureFinder(MSTool):
 
     config_type = ReferenceFeatureFinderConfig
     config: ReferenceFeatureFinderConfig
 
+    def _single_file_pipeline(
+        self,
+        ref_file_path: str,
+    ) -> FeatureMap:
+        ref_datas = OpenMSDataWrapper(file_paths=ref_file_path)
+        ref_datas.init_exps()
+        feature_finder = FeatureFinder(config=self.config.feature_finder_config)
+        ref_datas = feature_finder(ref_datas)
+        return FeatureMap.from_oms(ref_datas.features[0],ref_datas.chromatogram_peaks[0],ref_datas.exp_names[0])
+
     def __call__(
         self,
         ref_file_paths: list[str],
     ) -> FeatureMap | ConsensusMap:
-        ref_datas = OpenMSDataWrapper(file_paths=ref_file_paths)
-        ref_datas.init_exps()
-        feature_finder = FeatureFinder(config=self.config.feature_finder_config)
-        ref_datas = feature_finder(ref_datas)
+        ref_file_path_bag = db.from_sequence(ref_file_paths,npartitions=self.config.num_workers)
+        ref_feature_map_bag = ref_file_path_bag.map(self._single_file_pipeline)
+        ref_feature_map:list[FeatureMap] = ref_feature_map_bag.compute(scheduler=self.config.worker_type)
+        ref_datas = [ref.get_oms_feature_map() for ref in ref_feature_map]
+        ref_datas = OpenMSDataWrapper(
+            exp_names=ref_file_paths,
+            features=ref_datas
+        )
         if len(ref_datas.features) > 1 and self.config.mode == "consensus":
             feature_linker = FeatureLinker(config=self.config.feature_linker_config)
             ref_datas = feature_linker(ref_datas.features)
