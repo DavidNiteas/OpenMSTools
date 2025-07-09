@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 
 err_datas
+tests/data/large_files/
+work

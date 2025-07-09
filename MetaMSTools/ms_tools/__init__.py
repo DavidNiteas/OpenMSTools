@@ -1,16 +1,16 @@
-from .ABCs import (
-    ConvertMethodConfig,
-    MSTool,
-    MSToolConfig,
-    TomlConfig,
-)
-from .data_wrapper import OpenMSDataWrapper
-from .data_wrapper_structs import (
+from ..snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ..snaps.MassDataModule.data_module.experiment_module import (
     ConsensusMap,
     FeatureMap,
     SpectrumMap,
     XICMap,
     link_ms2_and_feature_map,
+)
+from .ABCs import (
+    ConvertMethodConfig,
+    MSTool,
+    MSToolConfig,
+    TomlConfig,
 )
 from .openms import (
     AdductDetector,

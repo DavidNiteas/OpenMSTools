@@ -34,12 +34,12 @@ class ReferenceFeatureFinderConfig(MSToolConfig):
             `max_size_feature`表示使用特征数最多的样本中的特征图 \
             如果只有一个参考样本，则无论mode如何，都会使用该样本的特征",
     )
-    worker_type: Literal["processes", "threads", "debug"] = Field(
+    worker_type: Literal["processes", "threads", "synchronous"] = Field(
         default="processes",
         description="使用的工作类型，\
             `processes`表示使用多进程，\
             `threads`表示使用多线程 \
-            `debug`表示使用debug模式，仅用于调试"
+            `synchronous`表示使用单线程同步调度，在调式时非常有用"
     )
     num_workers: int = Field(
         default=os.cpu_count(),
@@ -55,7 +55,7 @@ class ReferenceFeatureFinder(MSTool):
         self,
         ref_file_path: str,
     ) -> FeatureMap:
-        ref_datas = OpenMSDataWrapper(file_paths=ref_file_path)
+        ref_datas = OpenMSDataWrapper(file_paths=[ref_file_path])
         ref_datas.init_exps()
         feature_finder = FeatureFinder(config=self.config.feature_finder_config)
         ref_datas = feature_finder(ref_datas)
@@ -75,7 +75,7 @@ class ReferenceFeatureFinder(MSTool):
         )
         if len(ref_datas.features) > 1 and self.config.mode == "consensus":
             feature_linker = FeatureLinker(config=self.config.feature_linker_config)
-            ref_datas = feature_linker(ref_datas.features)
+            ref_datas = feature_linker(ref_datas)
         if ref_datas.consensus_map is not None:
             return ConsensusMap.from_oms(ref_datas.consensus_map)
         else:

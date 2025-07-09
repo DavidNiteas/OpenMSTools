@@ -75,12 +75,12 @@ class ExperimentAnalysisConfig(MSToolConfig):
         default=FeatureLinkerConfig(),
         description="特征链接的配置（如果只有一个输入文件，则不会进行特征链接）"
     )
-    worker_type: Literal["processes", "threads", "debug"] = Field(
+    worker_type: Literal["processes", "threads", "synchronous"] = Field(
         default="processes",
         description="使用的工作类型，\
             `processes`表示使用多进程，\
             `threads`表示使用多线程 \
-            `debug`表示使用debug模式，仅用于调试"
+            `synchronous`表示使用单线程同步调度，在调式时非常有用"
     )
     num_workers: int = Field(
         default=os.cpu_count(),
@@ -113,16 +113,16 @@ class ExperimentAnalysis(MSTool):
         meta_ms_wrapper = MetaMSDataWrapper(
             file_paths=open_ms_wrapper.file_paths,
             exp_names=open_ms_wrapper.exp_names,
-            spectrum_maps=SpectrumMap.from_oms(open_ms_wrapper.exps[0],open_ms_wrapper.exp_names[0]),
-            xic_maps=XICMap.from_oms(open_ms_wrapper.exps[0]),
-            feature_maps=FeatureMap.from_oms(
-                open_ms_wrapper.exps[0],
+            spectrum_maps=[SpectrumMap.from_oms(open_ms_wrapper.exps[0],open_ms_wrapper.exp_names[0])],
+            xic_maps=[XICMap.from_oms(open_ms_wrapper.exps[0])],
+            feature_maps=[FeatureMap.from_oms(
+                open_ms_wrapper.features[0],
                 open_ms_wrapper.chromatogram_peaks[0],
                 open_ms_wrapper.exp_names[0]
-            ),
+            )],
         )
         meta_ms_wrapper.ms2_feature_mapping = link_ms2_and_feature_map(
-            meta_ms_wrapper.feature_maps,meta_ms_wrapper.spectrum_maps,"spectrum"
+            meta_ms_wrapper.feature_maps[0],meta_ms_wrapper.spectrum_maps[0],"spectrum"
         )
         return meta_ms_wrapper
 
