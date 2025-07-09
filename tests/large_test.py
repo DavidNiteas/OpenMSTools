@@ -26,10 +26,10 @@ def main():
         use_rt_aligner=False,
         use_feature_linker=False,
         worker_type="processes",
-        num_workers=os.cpu_count() / 2
+        num_workers=os.cpu_count() / 2,
     )
     ea = ExperimentAnalysis(config = config)
-    wrapper = ea(exp_file_paths)
+    wrapper = ea._debug(exp_file_paths)
     return wrapper
 
 if __name__ == "__main__":

@@ -19,8 +19,9 @@ pyopenms = "*"
 numpy = "*"
 pandas = "*"
 dask = "*"
-trio = "*"
-rich = "*"
+pydantic = "*"
+toml = "*"
+rtree = "*"
 
 [tool.ruff]
 line-length = 120
