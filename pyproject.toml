@@ -22,6 +22,7 @@ dask = "*"
 pydantic = "*"
 toml = "*"
 rtree = "*"
+polars = "*"
 
 [tool.ruff]
 line-length = 120

@@ -10,9 +10,9 @@ class ConsensusMap(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
 
-    consensus_df: pd.DataFrame
-    consensus_feature_mapping: pd.Series
-    feature_consensus_mapping: pd.Series
+    consensus_df: pd.DataFrame | None = None
+    consensus_feature_mapping: pd.Series | None = None
+    feature_consensus_mapping: pd.Series | None = None
 
     @classmethod
     def from_oms(cls, consensus_map: oms.ConsensusMap) -> ConsensusMap:

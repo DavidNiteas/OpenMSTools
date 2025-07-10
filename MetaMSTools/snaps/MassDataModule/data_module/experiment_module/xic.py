@@ -10,8 +10,8 @@ class XICMap(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
 
-    ion_index: rtree.index.Index
-    ion_df: pd.DataFrame
+    ion_index: rtree.index.Index | None = None
+    ion_df: pd.DataFrame | None = None
 
     @classmethod
     def from_oms(

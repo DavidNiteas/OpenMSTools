@@ -18,7 +18,7 @@ def link_ms2_to_feature(feature_hulls: pd.DataFrame,spectrum_map: SpectrumMap) -
         feature_hulls['RTend'],
     ):
         spectrum_id_list += spectrum_map.search_ms2_by_range(
-            (mz_start,rt_start,mz_end,rt_end)
+            (mz_start,rt_start,mz_end,rt_end),"id"
         )
     return spectrum_id_list
 

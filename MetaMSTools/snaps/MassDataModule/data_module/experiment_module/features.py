@@ -14,8 +14,8 @@ class FeatureMap(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
 
-    feature_info: pd.DataFrame
-    hulls: pd.DataFrame
+    feature_info: pd.DataFrame | None = None
+    hulls: pd.DataFrame | None = None
 
     @staticmethod
     def get_feature_metadata(feature: oms.Feature) -> dict[

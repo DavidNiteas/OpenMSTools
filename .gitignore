@@ -173,3 +173,4 @@ cython_debug/
 err_datas
 tests/data/large_files/
 work
+cache
