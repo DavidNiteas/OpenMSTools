@@ -26,10 +26,16 @@ def link_ms2_and_feature_map(
     feature_map: FeatureMap,
     spectrum_map: SpectrumMap,
     key_id: Literal["feature","spectrum"] = "feature",
+    worker_mode: Literal["processes","threads","synchronous"] = "synchronous",
+    num_workers: int = 4,
 ) -> pd.Series:
+    '''
+    请注意！在并行环境下使用此函数的`threads`模式可能会导致进程无征兆的退出！具体原因不明。
+    '''
 
     feature_id_bag = db.from_sequence(
-        zip(feature_map.feature_info.index, feature_map.feature_info['hull_num'])
+        zip(feature_map.feature_info.index, feature_map.feature_info['hull_num']),
+        npartitions=num_workers,
     )
     feature_hulls_id_bag = feature_id_bag.map(
         lambda x: [x[0]+f"::{i}" for i in range(x[1])]
@@ -41,7 +47,7 @@ def link_ms2_and_feature_map(
         lambda x: link_ms2_to_feature(x,spectrum_map)
     )
     spectrum_id_list = dask.compute(
-        spectrum_id_bag, scheduler="threads"
+        spectrum_id_bag, scheduler=worker_mode, num_workers=num_workers
     )[0]
     if key_id == "feature":
         mapping_series = pd.Series(spectrum_id_list, index=feature_map.feature_info.index)

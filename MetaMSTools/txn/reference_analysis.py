@@ -42,7 +42,7 @@ class ReferenceFeatureFinderConfig(MSToolConfig):
             `synchronous`表示使用单线程同步调度，在调式时非常有用"
     )
     num_workers: int = Field(
-        default=os.cpu_count() if os.cpu_count() < 61 else 61,
+        default=os.cpu_count() if os.cpu_count() <= 60 else 60,
         description="并行计算的线程数/进程数"
     )
 
@@ -65,41 +65,24 @@ class ReferenceFeatureFinder(MSTool):
         self,
         ref_file_paths: list[str],
     ) -> FeatureMap | ConsensusMap:
-        ref_file_path_bag = db.from_sequence(ref_file_paths)
-        ref_feature_map_bag = ref_file_path_bag.map(self._single_file_pipeline)
-        ref_feature_map:list[FeatureMap] = ref_feature_map_bag.compute(
-            scheduler=self.config.worker_type,
-            num_workers=self.config.num_workers,
-        )
-        ref_datas = [ref.get_oms_feature_map() for ref in ref_feature_map]
-        ref_datas = OpenMSDataWrapper(
-            exp_names=ref_file_paths,
-            features=ref_datas
-        )
-        if len(ref_datas.features) > 1 and self.config.mode == "consensus":
-            feature_linker = FeatureLinker(config=self.config.feature_linker_config)
-            ref_datas = feature_linker(ref_datas)
-        if ref_datas.consensus_map is not None:
-            return ConsensusMap.from_oms(ref_datas.consensus_map)
+
+        if len(ref_file_paths) > 1:
+            ref_file_path_bag = db.from_sequence(ref_file_paths)
+            ref_feature_map_bag = ref_file_path_bag.map(self._single_file_pipeline)
+            ref_feature_map:list[FeatureMap] = ref_feature_map_bag.compute(
+                scheduler=self.config.worker_type,
+                num_workers=self.config.num_workers,
+            )
+            ref_datas = [ref.get_oms_feature_map() for ref in ref_feature_map]
+            ref_datas = OpenMSDataWrapper(
+                exp_names=ref_file_paths,
+                features=ref_datas
+            )
         else:
-            ref_datas.infer_ref_feature_for_align()
-            return FeatureMap.from_oms(ref_datas.ref_feature_for_align)
-        
-    def _debug(
-        self,
-        ref_file_paths: list[str],
-    ) -> FeatureMap | ConsensusMap:
-        ref_file_path_bag = db.from_sequence(ref_file_paths)
-        ref_feature_map_bag = ref_file_path_bag.map(self._single_file_pipeline)
-        ref_feature_map:list[FeatureMap] = ref_feature_map_bag.compute(
-            scheduler=self.config.worker_type,
-            num_workers=self.config.num_workers,
-        )
-        ref_datas = [ref.get_oms_feature_map() for ref in ref_feature_map]
-        ref_datas = OpenMSDataWrapper(
-            exp_names=ref_file_paths,
-            features=ref_datas
-        )
+            ref_datas = OpenMSDataWrapper(file_paths=ref_file_paths)
+            ref_datas.init_exps()
+            ref_datas = FeatureFinder(config=self.config.feature_finder_config)(ref_datas)
+
         if len(ref_datas.features) > 1 and self.config.mode == "consensus":
             feature_linker = FeatureLinker(config=self.config.feature_linker_config)
             ref_datas = feature_linker(ref_datas)
