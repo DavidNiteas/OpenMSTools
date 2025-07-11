@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import re
 from re import Pattern
 from typing import ClassVar, Literal
@@ -14,40 +13,62 @@ import pandas as pd
 import polars as pl
 import pyopenms as oms
 import rtree
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import create_engine
+from pydantic import Field
+
+from .ABCs import BaseMap
 
 
-class SpectrumMap(BaseModel):
-
-
-    model_config = ConfigDict({"arbitrary_types_allowed": True})
+class SpectrumMap(BaseMap):
 
     scan_id_matcher: ClassVar[Pattern] = re.compile(r'scan=(\d+)')
 
-    exp_name: str
-    ms1_index: pd.Index | None = None
-    ms1_df: pl.DataFrame | None = None
-    ms2_index: pd.Index | None = None
-    ms2_df: pl.DataFrame | None = None
-    ms2_rtree_index: rtree.index.Index | None = None
-    exp_meta: pd.Series | None = None
+    ms1_index: pd.Index | None = Field(
+        default=None,
+        data_type="index",
+        save_mode="csv",
+        description="MS1谱图的索引"
+    )
+    ms1_df: pl.DataFrame | None = Field(
+        default=None,
+        data_type="data",
+        save_mode="sqlite",
+        description="MS1谱图的DataFrame，基于polars"
+    )
+    ms2_index: pd.Index | None = Field(
+        default=None,
+        data_type="index",
+        save_mode="csv",
+        description="MS2谱图的索引"
+    )
+    ms2_df: pl.DataFrame | None = Field(
+        default=None,
+        data_type="data",
+        save_mode="sqlite",
+        description="MS2谱图的DataFrame，基于polars"
+    )
+    ms2_rtree_index: rtree.index.Index | None = Field(
+        default=None,
+        data_type="index",
+        save_mode="rtree",
+        build_func='build_ms2_rtree_index',
+        init_func='init_ms2_rtree_index',
+        description="基于R-Tree的MS2索引，可以基于mz和rt范围快速索引MS2数据。\
+                    可以通过`init_ms2_rtree_index`方法从ms2_df中初始化。",
+    )
 
     @staticmethod
-    def get_exp_meta(exp: oms.MSExperiment) -> pd.Series:
+    def get_exp_meta(exp: oms.MSExperiment) -> dict[str, str]:
         spec: oms.MSSpectrum = exp[0]
         meta_info_string = spec.getMetaValue("filter string")
         meta_info_list = meta_info_string.split(" ")
         ms_type = meta_info_list[0]
         ion_mode = meta_info_list[1]
         ion_source = meta_info_list[3]
-        return pd.Series(
-            {
-                "ms_type": ms_type,
-                "ion_mode": ion_mode,
-                "ion_source": ion_source,
-            }
-        )
+        return {
+            "ms_type": ms_type,
+            "ion_mode": ion_mode,
+            "ion_source": ion_source,
+        }
 
     @staticmethod
     def get_scan_index(spec: oms.MSSpectrum) -> int:
@@ -85,8 +106,8 @@ class SpectrumMap(BaseModel):
             "precursor_mz": precursor_mz,
             "base_peak_mz": base_peak_mz,
             "base_peak_intensity": base_peak_intensity,
-            "mz_array": mz_array,
-            "intensity_array": intensity_array,
+            "mz_array": mz_array.astype(np.float32),
+            "intensity_array": intensity_array.astype(np.float32),
         }
 
     @staticmethod
@@ -105,8 +126,8 @@ class SpectrumMap(BaseModel):
         return {
             "spec_id": spec_id,
             "rt": rt,
-            "mz_array": mz_array,
-            "intensity_array": intensity_array,
+            "mz_array": mz_array.astype(np.float32),
+            "intensity_array": intensity_array.astype(np.float32),
         }
 
     def insert_ms1_id_to_ms2(self) -> None:
@@ -160,23 +181,27 @@ class SpectrumMap(BaseModel):
             .alias('rt')
         ).drop('ms1_rt')
 
-    def init_ms2_rtree_index(self) -> None:
+    def build_ms2_rtree_index(self, path : str | None = None) -> rtree.index.Index:
         if self.ms2_df is None:
             raise ValueError(
                 "MS2 dataframe must be loaded before initializing R-tree index"
             )
-        self.ms2_rtree_index = rtree.index.Index()
+        ms2_rtree_index = rtree.index.Index(path)
         for i,(rt,precursor_mz) in enumerate(
             zip(
                 self.ms2_df['rt'],
                 self.ms2_df['precursor_mz'],
             )
         ):
-            self.ms2_rtree_index.insert(
+            ms2_rtree_index.insert(
                 id=i,
                 coordinates=(precursor_mz, rt, precursor_mz, rt),
                 obj=i
             )
+        return ms2_rtree_index
+
+    def init_ms2_rtree_index(self):
+        self.ms2_rtree_index = self.build_ms2_rtree_index()
 
     def search_ms2_by_range(
         self,
@@ -225,76 +250,24 @@ class SpectrumMap(BaseModel):
             pl.col('base_peak_intensity').cast(pl.Float32),
         )
         ms2_index = pd.Index(ms2_df['spec_id'])
-        exp_meta = cls.get_exp_meta(exp)
+        metadata = cls.get_exp_meta(exp)
         spectrum_map = cls(
             exp_name=exp_name,
+            metadata=metadata,
             ms1_index=ms1_index,
             ms1_df=ms1_df,
             ms2_index=ms2_index,
             ms2_df=ms2_df,
-            exp_meta=exp_meta,
         )
         spectrum_map.insert_ms1_id_to_ms2()
         spectrum_map.convert_scan_to_spec_id()
         spectrum_map.modify_ms2_rt()
         return spectrum_map
 
-    def __getstate__(self):
-        state = copy.deepcopy(super().__getstate__())
-        state['__dict__']['ms2_df'] = state['__dict__']['ms2_df'].to_pandas()
-        state['__dict__']['ms1_df'] = state['__dict__']['ms1_df'].to_pandas()
-        return state
-
-    def __setstate__(self, state):
-        state['__dict__']['ms2_df'] = pl.from_pandas(state['__dict__']['ms2_df'])
-        state['__dict__']['ms1_df'] = pl.from_pandas(state['__dict__']['ms1_df'])
-        need_init_ms2_rtree_index = False
-        ms2_rtree_index:rtree.index.Index | None = state['__dict__']['ms2_rtree_index']
-        if isinstance(ms2_rtree_index, rtree.index.Index):
-            if ms2_rtree_index.get_size() == 0:
-                state['__dict__']['ms2_rtree_index'] = None
-                need_init_ms2_rtree_index = True
-        super().__setstate__(state)
-        if need_init_ms2_rtree_index:
-            self.init_ms2_rtree_index()
-
     def save(self, save_dir_path: str):
 
-        if not os.path.exists(save_dir_path):
-            os.makedirs(save_dir_path)
-
-        index_dir_path = os.path.join(save_dir_path, "index")
-        if not os.path.exists(index_dir_path):
-            os.makedirs(index_dir_path)
-
-        metadata_path = os.path.join(save_dir_path, "metadata.json")
-        metadata = {"exp_name": self.exp_name, **self.exp_meta.to_dict()}
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f)
-
-        ms1_index_path = os.path.join(index_dir_path, "ms1_index.csv")
-        ms2_index_path = os.path.join(index_dir_path, "ms2_index.csv")
-        pd.Series(self.ms1_index).to_csv(ms1_index_path, header=False)
-        pd.Series(self.ms2_index).to_csv(ms2_index_path, header=False)
-
-        ms2_rtree_index_path = os.path.join(index_dir_path, "ms2_rtree_index")
-        saved_ms2_rtree_index = rtree.index.Index(ms2_rtree_index_path)
-        for i,(rt,precursor_mz) in enumerate(
-            zip(
-                self.ms2_df['rt'],
-                self.ms2_df['precursor_mz'],
-            )
-        ):
-            saved_ms2_rtree_index.insert(
-                id=i,
-                coordinates=(precursor_mz, rt, precursor_mz, rt),
-                obj=i
-            )
-
-        db_path = os.path.join(save_dir_path, "data.db")
-        engine = create_engine(f"sqlite:///{db_path}")
-
-        ms1_df_to_save = self.ms1_df.with_columns(
+        self_to_save = copy.copy(self)
+        self_to_save.ms1_df = self.ms1_df.with_columns(
             pl.col("mz_array").map_elements(
                 lambda x: json.dumps(x.tolist()),
                 return_dtype=pl.String,
@@ -304,8 +277,7 @@ class SpectrumMap(BaseModel):
                 return_dtype=pl.String,
             ),
         )
-        ms1_df_to_save.write_database(table_name="ms1_data", connection=engine.connect(), if_table_exists="replace")
-        ms2_df_to_save = self.ms2_df.with_columns(
+        self_to_save.ms2_df = self.ms2_df.with_columns(
             pl.col("mz_array").map_elements(
                 lambda x: json.dumps(x.tolist()),
                 return_dtype=pl.String,
@@ -315,63 +287,37 @@ class SpectrumMap(BaseModel):
                 return_dtype=pl.String,
             ),
         )
-        ms2_df_to_save.write_database(table_name="ms2_data", connection=engine.connect(), if_table_exists="replace")
 
-        engine.dispose()
+        super(SpectrumMap, self_to_save).save(save_dir_path)
 
     @classmethod
-    def load(cls, save_dir_path: str) -> SpectrumMap:
+    def load(cls, save_dir_path: str):
 
-        index_dir_path = os.path.join(save_dir_path, "index")
+        data_dict = cls._base_load(save_dir_path)
 
-        metadata_path = os.path.join(save_dir_path, "metadata.json")
-        with open(metadata_path) as f:
-            metadata = json.load(f)
-        exp_name = metadata.pop('exp_name')
-        exp_meta = pd.Series(metadata)
+        if 'ms1_df' in data_dict:
+            if isinstance(data_dict['ms1_df'], pl.DataFrame):
+                data_dict['ms1_df'] = data_dict['ms1_df'].with_columns(
+                    pl.col("mz_array").map_elements(
+                        lambda x: np.array(json.loads(x)),
+                        return_dtype=pl.Object,
+                    ),
+                    pl.col("intensity_array").map_elements(
+                        lambda x: np.array(json.loads(x)),
+                        return_dtype=pl.Object,
+                    ),
+                )
+        if 'ms2_df' in data_dict:
+            if isinstance(data_dict['ms2_df'], pl.DataFrame):
+                data_dict['ms2_df'] = data_dict['ms2_df'].with_columns(
+                    pl.col("mz_array").map_elements(
+                        lambda x: np.array(json.loads(x)),
+                        return_dtype=pl.Object,
+                    ),
+                    pl.col("intensity_array").map_elements(
+                        lambda x: np.array(json.loads(x)),
+                        return_dtype=pl.Object,
+                    ),
+                )
 
-        ms1_index_path = os.path.join(index_dir_path, "ms1_index.csv")
-        ms2_index_path = os.path.join(index_dir_path, "ms2_index.csv")
-        ms1_index = pd.Index(pd.read_csv(ms1_index_path, header=None, index_col=0).iloc[:,0])
-        ms2_index = pd.Index(pd.read_csv(ms2_index_path, header=None, index_col=0).iloc[:,0])
-
-        ms2_rtree_index_path = os.path.join(index_dir_path, "ms2_rtree_index")
-        ms2_rtree_index = rtree.index.Index(ms2_rtree_index_path)
-
-        db_path = os.path.join(save_dir_path, "data.db")
-        engine = create_engine(f"sqlite:///{db_path}")
-
-        ms1_df = pl.read_database(query="SELECT * FROM ms1_data", connection=engine.connect())
-        ms1_df = ms1_df.with_columns(
-            pl.col("mz_array").map_elements(
-                lambda x: np.array(json.loads(x)),
-                return_dtype=pl.Object,
-            ),
-            pl.col("intensity_array").map_elements(
-                lambda x: np.array(json.loads(x)),
-                return_dtype=pl.Object,
-            ),
-        )
-        ms2_df = pl.read_database(query="SELECT * FROM ms2_data", connection=engine.connect())
-        ms2_df = ms2_df.with_columns(
-            pl.col("mz_array").map_elements(
-                lambda x: np.array(json.loads(x)),
-                return_dtype=pl.Object,
-            ),
-            pl.col("intensity_array").map_elements(
-                lambda x: np.array(json.loads(x)),
-                return_dtype=pl.Object,
-            ),
-        )
-
-        engine.dispose()
-
-        return cls(
-            exp_name=exp_name,
-            ms1_index=ms1_index,
-            ms1_df=ms1_df,
-            ms2_index=ms2_index,
-            ms2_df=ms2_df,
-            ms2_rtree_index=ms2_rtree_index,
-            exp_meta=exp_meta,
-        )
+        return cls(**data_dict)
