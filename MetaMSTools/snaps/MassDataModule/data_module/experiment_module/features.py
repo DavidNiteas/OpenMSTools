@@ -1,62 +1,44 @@
 from __future__ import annotations
 
 import copy
-import json
 from typing import Literal
 
 import dask
 import dask.bag as db
-import numpy as np
-import pandas as pd
+import geopandas as gpd
 import polars as pl
 import pyopenms as oms
-import rtree
 from pydantic import Field
+from shapely.geometry import box
 
 from .ABCs import BaseMap
 
 
 class FeatureMap(BaseMap):
 
-    feature_index: pd.Index | None = Field(
+    feature_index: gpd.GeoDataFrame | None = Field(
         default=None,
         data_type="index",
-        save_mode="csv",
-        description="Feature信息表的索引"
+        save_mode="parquet",
+        description="Feature的空间索引表，基于geopandas"
     )
     feature_info: pl.DataFrame | None = Field(
         default=None,
         data_type="data",
         save_mode="sqlite",
-        description="Feature信息表"
+        description="Feature信息表，基于polars"
     )
-    feature_rtree_index: rtree.index.Index | None = Field(
+    hull_index: gpd.GeoDataFrame | None = Field(
         default=None,
         data_type="index",
-        save_mode="rtree",
-        build_func="build_feature_rtree_index",
-        init_func="init_feature_rtree_index",
-        description="Feature的R-tree索引"
-    )
-    hull_index: pd.Index | None = Field(
-        default=None,
-        data_type="index",
-        save_mode="csv",
-        description="Hull信息表的索引"
+        save_mode="parquet",
+        description="Hull的空间索引表，基于geopandas"
     )
     hull_info: pl.DataFrame | None = Field(
         default=None,
         data_type="data",
         save_mode="sqlite",
-        description="Hull信息表"
-    )
-    hull_rtree_index: rtree.index.Index | None = Field(
-        default=None,
-        data_type="index",
-        save_mode="rtree",
-        build_func="build_hull_rtree_index",
-        init_func="init_hull_rtree_index",
-        description="Hull的R-tree索引"
+        description="Hull信息表，基于polars"
     )
 
     @staticmethod
@@ -66,17 +48,17 @@ class FeatureMap(BaseMap):
             "isotope_pattern",
             "adduct_type","adduct_mass",
         ],
-        str | float | int | np.ndarray
+        str | float | int | list[float]
     ]:
         all_keys = []
         feature.getKeys(all_keys)
         all_keys = set(all_keys)
         metadata = {
             "hull_num": feature.getMetaValue("num_of_masstraces"),
-            "hull_mz": np.array(feature.getMetaValue("masstrace_centroid_mz"),dtype=np.float32),
-            "hull_rt": np.array(feature.getMetaValue("masstrace_centroid_rt"),dtype=np.float32),
-            "hull_intensity": np.array(feature.getMetaValue("masstrace_intensity"),dtype=np.float32),
-            "isotope_pattern": np.cumsum(feature.getMetaValue("isotope_distances"),dtype=np.float32),
+            "hull_mz": feature.getMetaValue("masstrace_centroid_mz"),
+            "hull_rt": feature.getMetaValue("masstrace_centroid_rt"),
+            "hull_intensity": feature.getMetaValue("masstrace_intensity"),
+            "isotope_pattern": feature.getMetaValue("isotope_distances"),
         }
         if "dc_charge_adducts" in all_keys:
             metadata["adduct_type"] = feature.getMetaValue("dc_charge_adducts")
@@ -93,15 +75,18 @@ class FeatureMap(BaseMap):
             ["RT","mz","intensity","MZstart","RTstart","MZend","RTend"]
         ]
         feature_info.index.name = "feature_id"
-        feature_info = pl.from_pandas(feature_info,include_index=True)
-        feature_info = feature_info.with_columns(
-            pl.col("RT").cast(pl.Float32),
-            pl.col("mz").cast(pl.Float32),
-            pl.col("intensity").cast(pl.Float32),
-            pl.col("MZstart").cast(pl.Float32),
-            pl.col("RTstart").cast(pl.Float32),
-            pl.col("MZend").cast(pl.Float32),
-            pl.col("RTend").cast(pl.Float32),
+        feature_info = pl.from_pandas(
+            feature_info,
+            schema_overrides = {
+                "RT": pl.Float32,
+                "mz": pl.Float32,
+                "intensity": pl.Float32,
+                "MZstart": pl.Float32,
+                "RTstart": pl.Float32,
+                "MZend": pl.Float32,
+                "RTend": pl.Float32,
+            },
+            include_index=True
         )
         feature_bag = db.from_sequence(feature_map, npartitions=num_workers)
         feature_metadata_bag = feature_bag.map(FeatureMap.get_feature_metadata)
@@ -110,28 +95,23 @@ class FeatureMap(BaseMap):
         )[0]
         feature_metadata_df = pl.DataFrame(
             feature_metadata_list,
+            schema_overrides={
+                "hull_num": pl.Int8,
+                "hull_mz": pl.List(pl.Float32),
+                "hull_rt": pl.List(pl.Float32),
+                "hull_intensity": pl.List(pl.Float32),
+                "isotope_pattern": pl.List(pl.Float32),
+            }
         )
         feature_metadata_df = feature_metadata_df.with_columns(
-            pl.col("hull_num").cast(pl.Int32),
+            pl.col("isotope_pattern").list.eval(pl.element().cum_sum()),
         )
+        if "adduct_mass" in feature_metadata_df.columns:
+            feature_metadata_df = feature_metadata_df.with_columns(
+                pl.col("adduct_mass").cast(pl.Float32),
+            )
         feature_info = pl.concat([feature_info, feature_metadata_df], how="horizontal")
         return feature_info
-
-    @staticmethod
-    def get_hull_range(
-        hull: oms.ConvexHull2D,
-    ) -> dict[
-        Literal["MZstart","RTstart","MZend","RTend"],
-        float
-    ]:
-        rt_points = hull.getHullPoints()[:,0]
-        mz_points = hull.getHullPoints()[:,1]
-        return {
-            "MZstart": np.min(mz_points),
-            "RTstart": np.min(rt_points),
-            "MZend": np.max(mz_points),
-            "RTend": np.max(rt_points),
-        }
 
     @staticmethod
     def get_hulls(
@@ -151,15 +131,37 @@ class FeatureMap(BaseMap):
         for hull_id in hulls_id:
             hull = {}
             hull['hull_id'] = hull_id
-            hull.update(FeatureMap.get_hull_range(mz_hulls[hull_id]))
             rt_points, intens_points = rt_hulls[hull_id].get_peaks()
             mz_points = mz_hulls[hull_id].getHullPoints()[:,1][:len(rt_points)]
-            hull['rt_points'] = rt_points.astype(np.float32)
-            hull['mz_points'] = mz_points.astype(np.float32)
-            hull['intens_points'] = intens_points.astype(np.float32)
+            hull['rt_points'] = rt_points.tolist()
+            hull['mz_points'] = mz_points.tolist()
+            hull['intens_points'] = intens_points.tolist()
             hulls.append(hull)
-        hulls = pl.DataFrame(hulls)
-        return hulls
+        hull_info = pl.DataFrame(
+            hulls,
+            schema_overrides={
+                'rt_points': pl.List(pl.Float32),
+                'mz_points': pl.List(pl.Float32),
+                'intens_points': pl.List(pl.Float32),
+            }
+        )
+        hull_info = hull_info.with_columns(
+            pl.col("rt_points").list.min().alias("RTstart"),
+            pl.col("rt_points").list.max().alias("RTend"),
+            pl.col("mz_points").list.min().alias("MZstart"),
+            pl.col("mz_points").list.max().alias("MZend"),
+        )
+        hull_info = hull_info.select(
+            "hull_id",
+            "RTstart",
+            "RTend",
+            "MZstart",
+            "MZend",
+            "rt_points",
+            "mz_points",
+            "intens_points",
+        )
+        return hull_info
 
     @classmethod
     def from_oms(
@@ -175,11 +177,35 @@ class FeatureMap(BaseMap):
         feature_info = feature_info.with_columns(
             (f"{exp_name}::" + pl.col("feature_id").cast(str)).alias("feature_id"),
         )
-        feature_index = pd.Index(feature_info["feature_id"].to_list())
+        feature_index = gpd.GeoDataFrame(
+            {"iloc": range(len(feature_info))},
+            index=feature_info["feature_id"].to_list(),
+            geometry=[
+                box(rt_start, mz_start, rt_end, mz_end) \
+                    for rt_start, mz_start, rt_end, mz_end in zip(
+                        feature_info["RTstart"],
+                        feature_info["MZstart"],
+                        feature_info["RTend"],
+                        feature_info["MZend"],
+                    )
+            ],
+        )
         hull_info = hull_info.with_columns(
             (f"{exp_name}::" + pl.col("hull_id").cast(str)).alias("hull_id"),
         )
-        hull_index = pd.Index(hull_info["hull_id"].to_list())
+        hull_index = gpd.GeoDataFrame(
+            {"iloc": range(len(hull_info))},
+            index=hull_info["hull_id"].to_list(),
+            geometry=[
+                box(rt_start, mz_start, rt_end, mz_end) \
+                    for rt_start, mz_start, rt_end, mz_end in zip(
+                        hull_info["RTstart"],
+                        hull_info["MZstart"],
+                        hull_info["RTend"],
+                        hull_info["MZend"],
+                    )
+            ]
+        )
         return cls(
             exp_name=exp_name,
             feature_info=feature_info,
@@ -190,139 +216,78 @@ class FeatureMap(BaseMap):
 
     def get_oms_feature_map(self) -> oms.FeatureMap:
         feature_map = oms.FeatureMap()
-        for feature_id, feature_row in self.feature_info.iterrows():
+        feature_info = self.feature_info.select(
+            "feature_id","mz", "RT", "intensity",
+        ).with_columns(
+            pl.col("feature_id").str.split("::").list.get(1).cast(pl.Int128).alias("feature_id"),
+        )
+        for i in range(len(feature_info)):
             feature = oms.Feature()
-            feature.setUniqueId(int(feature_id.split("::")[1]))
-            feature.setMZ(feature_row["mz"])
-            feature.setRT(feature_row["RT"])
-            feature.setIntensity(feature_row["intensity"])
+            feature.setUniqueId(feature_info[i, "feature_id"])
+            feature.setMZ(feature_info[i, "mz"])
+            feature.setRT(feature_info[i, "RT"])
+            feature.setIntensity(feature_info[i, "intensity"])
             feature_map.push_back(feature)
         return feature_map
-
-    def build_feature_rtree_index(self, path : str | None = None) -> rtree.index.Index:
-        if self.feature_info is None:
-            raise ValueError(
-                "Feature info dataframe must be loaded before initializing R-tree index"
-            )
-        feature_rtree_index = rtree.index.Index(path)
-        for i,(mz_start,rt_start,mz_end,rt_end) in enumerate(
-            zip(
-                self.feature_info['MZstart'],
-                self.feature_info['RTstart'],
-                self.feature_info['MZend'],
-                self.feature_info['RTend'],
-            )
-        ):
-            feature_rtree_index.insert(
-                id=i,
-                coordinates=(mz_start,rt_start,mz_end,rt_end),
-                obj=i
-            )
-        return feature_rtree_index
-
-    def init_feature_rtree_index(self, path : str | None = None) -> None:
-        self.feature_rtree_index = self.build_feature_rtree_index(path)
 
     def search_feature_by_range(
         self,
         coordinates: tuple[
-            float, # min_mz
             float, # min_rt
-            float, # max_mz
+            float, # min_mz
             float, # max_rt
+            float, # max_mz
         ],
         return_type: Literal["id", "indices", "df"] = "id",
     ) -> list[int] | list[str] | pl.DataFrame:
-        if self.feature_rtree_index is None:
-            self.init_feature_rtree_index()
-        index = list(self.feature_rtree_index.intersection(coordinates))
+        iloc = list(self.feature_index.sindex.intersection(coordinates))
         if return_type == "id":
-            return self.feature_index[index].tolist()
+            return self.feature_index[iloc].index.tolist()
         elif return_type == "df":
-            return self.feature_info[index]
+            return self.feature_info[iloc]
         else:
-            return index
-
-    def build_hull_rtree_index(self, path : str | None = None) -> rtree.index.Index:
-        if self.hull_info is None:
-            raise ValueError(
-                "Hulls dataframe must be loaded before initializing R-tree index"
-            )
-        hull_rtree_index = rtree.index.Index(path)
-        for i,(mz_start,rt_start,mz_end,rt_end) in enumerate(
-            zip(
-                self.hull_info['MZstart'],
-                self.hull_info['RTstart'],
-                self.hull_info['MZend'],
-                self.hull_info['RTend'],
-            )
-        ):
-            hull_rtree_index.insert(
-                id=i,
-                coordinates=(mz_start,rt_start,mz_end,rt_end),
-                obj=i
-            )
-        return hull_rtree_index
-
-    def init_hull_rtree_index(self, path : str | None = None) -> None:
-        self.hull_rtree_index = self.build_hull_rtree_index(path)
+            return iloc
 
     def search_hull_by_range(
         self,
         coordinates: tuple[
-            float, # min_mz
             float, # min_rt
-            float, # max_mz
+            float, # min_mz
             float, # max_rt
+            float, # max_mz
         ],
         return_type: Literal["id", "indices", "df"] = "id",
     ) -> list[int] | list[str] | pl.DataFrame:
-        if self.hull_rtree_index is None:
-            self.init_hull_rtree_index()
-        index = list(self.hull_rtree_index.intersection(coordinates))
+        iloc = list(self.hull_index.sindex.intersection(coordinates))
         if return_type == "id":
-            return self.hull_index[index].tolist()
+            return self.hull_index[iloc].index.tolist()
         elif return_type == "df":
-            return self.hull_info[index]
+            return self.hull_info[iloc]
         else:
-            return index
+            return iloc
 
     def save(self, save_dir_path: str):
 
         self_to_save = copy.copy(self)
 
         self_to_save.feature_info = self.feature_info.with_columns(
-            pl.col("hull_mz").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("hull_rt").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("hull_intensity").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("isotope_pattern").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
+            ("[" + pl.col("hull_mz").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("hull_mz"),
+            ("[" + pl.col("hull_rt").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("hull_rt"),
+            ("[" + pl.col("hull_intensity").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("hull_intensity"),
+            ("[" + pl.col("isotope_pattern").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("isotope_pattern"),
         )
 
         self_to_save.hull_info = self.hull_info.with_columns(
-            pl.col("rt_points").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("mz_points").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("intens_points").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
+            ("[" + pl.col("rt_points").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("rt_points"),
+            ("[" + pl.col("mz_points").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("mz_points"),
+            ("[" + pl.col("intens_points").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("intens_points"),
         )
 
         super(FeatureMap, self_to_save).save(save_dir_path)
@@ -336,38 +301,46 @@ class FeatureMap(BaseMap):
 
         if feature_info is not None:
             data_dict['feature_info'] = feature_info.with_columns(
-                pl.col("hull_mz").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
-                pl.col("hull_rt").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
-                pl.col("hull_intensity").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
-                pl.col("isotope_pattern").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
+                pl.col("hull_mz")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
+                pl.col("hull_rt")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
+                pl.col("hull_intensity")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
+                pl.col("isotope_pattern")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
             )
+
         hull_info: pl.DataFrame | None = data_dict.pop("hull_info")
         if hull_info is not None:
             data_dict['hull_info'] = hull_info.with_columns(
-                pl.col("rt_points").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
-                pl.col("mz_points").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
-                pl.col("intens_points").map_elements(
-                    lambda x: np.array(json.loads(x)),
-                    return_dtype=pl.Object,
-                ),
+                pl.col("rt_points")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
+                pl.col("mz_points")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
+                pl.col("intens_points")
+                    .str.strip_chars_start("[")
+                    .str.strip_chars_end("]")
+                    .str.split(",")
+                    .cast(pl.List(pl.Float32)),
             )
 
         return cls(**data_dict)
