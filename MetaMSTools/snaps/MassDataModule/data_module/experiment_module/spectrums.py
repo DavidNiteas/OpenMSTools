@@ -171,6 +171,23 @@ class SpectrumMap(BaseMap):
             .alias('rt')
         ).drop('ms1_rt')
 
+    def search_ms1_by_range(
+        self,
+        coordinates: tuple[
+            float, # min_rt
+            float, # max_rt
+        ],
+        return_type: Literal["id", "indices", "df"] = "id",
+    ) -> list[int] | list[str] | pl.DataFrame:
+        coordinates = (coordinates[0], -1, coordinates[1], 1)
+        iloc = list(self.ms1_index.sindex.intersection(coordinates))
+        if return_type == "id":
+            return self.ms1_index.index[iloc].tolist()
+        elif return_type == "df":
+            return self.ms1_df[iloc]
+        else:
+            return iloc
+
     def search_ms2_by_range(
         self,
         coordinates: tuple[
