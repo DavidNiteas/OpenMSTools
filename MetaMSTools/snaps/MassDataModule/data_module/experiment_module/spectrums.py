@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import copy
-import json
 import re
 from re import Pattern
 from typing import ClassVar, Literal
 
 import dask
 import dask.bag as db
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import polars as pl
 import pyopenms as oms
-import rtree
 from pydantic import Field
 
 from .ABCs import BaseMap
@@ -22,11 +21,11 @@ class SpectrumMap(BaseMap):
 
     scan_id_matcher: ClassVar[Pattern] = re.compile(r'scan=(\d+)')
 
-    ms1_index: pd.Index | None = Field(
+    ms1_index: gpd.GeoDataFrame | None = Field(
         default=None,
         data_type="index",
-        save_mode="csv",
-        description="MS1谱图的索引"
+        save_mode="parquet",
+        description="MS1谱图的空间索引表，基于geopandas"
     )
     ms1_df: pl.DataFrame | None = Field(
         default=None,
@@ -34,26 +33,17 @@ class SpectrumMap(BaseMap):
         save_mode="sqlite",
         description="MS1谱图的DataFrame，基于polars"
     )
-    ms2_index: pd.Index | None = Field(
+    ms2_index: gpd.GeoDataFrame | None = Field(
         default=None,
         data_type="index",
-        save_mode="csv",
-        description="MS2谱图的索引"
+        save_mode="parquet",
+        description="MS2谱图的空间索引表，基于geopandas"
     )
     ms2_df: pl.DataFrame | None = Field(
         default=None,
         data_type="data",
         save_mode="sqlite",
         description="MS2谱图的DataFrame，基于polars"
-    )
-    ms2_rtree_index: rtree.index.Index | None = Field(
-        default=None,
-        data_type="index",
-        save_mode="rtree",
-        build_func='build_ms2_rtree_index',
-        init_func='init_ms2_rtree_index',
-        description="基于R-Tree的MS2索引，可以基于mz和rt范围快速索引MS2数据。\
-                    可以通过`init_ms2_rtree_index`方法从ms2_df中初始化。",
     )
 
     @staticmethod
@@ -106,8 +96,8 @@ class SpectrumMap(BaseMap):
             "precursor_mz": precursor_mz,
             "base_peak_mz": base_peak_mz,
             "base_peak_intensity": base_peak_intensity,
-            "mz_array": mz_array.astype(np.float32),
-            "intensity_array": intensity_array.astype(np.float32),
+            "mz_array": mz_array.tolist(),
+            "intensity_array": intensity_array.tolist(),
         }
 
     @staticmethod
@@ -126,8 +116,8 @@ class SpectrumMap(BaseMap):
         return {
             "spec_id": spec_id,
             "rt": rt,
-            "mz_array": mz_array.astype(np.float32),
-            "intensity_array": intensity_array.astype(np.float32),
+            "mz_array": mz_array.tolist(),
+            "intensity_array": intensity_array.tolist(),
         }
 
     def insert_ms1_id_to_ms2(self) -> None:
@@ -156,14 +146,14 @@ class SpectrumMap(BaseMap):
             self.ms1_df = self.ms1_df.with_columns(
                 (f"{self.exp_name}::ms1::" + self.ms1_df['spec_id'].cast(str)).alias('spec_id')
             )
-            self.ms1_index = pd.Index(self.ms1_df['spec_id'].to_list())
+            self.ms1_index.index = pd.Index(self.ms1_df['spec_id'].to_list())
         if self.ms2_df.schema['spec_id'] in (
             pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64
         ):
             self.ms2_df = self.ms2_df.with_columns(
                 (f"{self.exp_name}::ms2::" + self.ms2_df['spec_id'].cast(str)).alias('spec_id')
             )
-            self.ms2_index = pd.Index(self.ms2_df['spec_id'].to_list())
+            self.ms2_index.index = pd.Index(self.ms2_df['spec_id'].to_list())
         if self.ms2_df.schema['ms1_id'] in (
             pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64
         ):
@@ -181,47 +171,23 @@ class SpectrumMap(BaseMap):
             .alias('rt')
         ).drop('ms1_rt')
 
-    def build_ms2_rtree_index(self, path : str | None = None) -> rtree.index.Index:
-        if self.ms2_df is None:
-            raise ValueError(
-                "MS2 dataframe must be loaded before initializing R-tree index"
-            )
-        ms2_rtree_index = rtree.index.Index(path)
-        for i,(rt,precursor_mz) in enumerate(
-            zip(
-                self.ms2_df['rt'],
-                self.ms2_df['precursor_mz'],
-            )
-        ):
-            ms2_rtree_index.insert(
-                id=i,
-                coordinates=(precursor_mz, rt, precursor_mz, rt),
-                obj=i
-            )
-        return ms2_rtree_index
-
-    def init_ms2_rtree_index(self):
-        self.ms2_rtree_index = self.build_ms2_rtree_index()
-
     def search_ms2_by_range(
         self,
         coordinates: tuple[
-            float, # min_mz
             float, # min_rt
-            float, # max_mz
+            float, # min_mz
             float, # max_rt
+            float, # max_mz
         ],
         return_type: Literal["id", "indices", "df"] = "id",
     ) -> list[int] | list[str] | pl.DataFrame:
-        if self.ms2_rtree_index is None:
-            self.init_ms2_rtree_index()
-        index = list(self.ms2_rtree_index.intersection(coordinates, objects="raw"))
+        iloc = list(self.ms2_index.sindex.intersection(coordinates))
         if return_type == "id":
-            return self.ms2_index[index].tolist()
+            return self.ms2_index.index[iloc].tolist()
         elif return_type == "df":
-            return self.ms2_df[index]
+            return self.ms2_df[iloc]
         else:
-            return index
+            return iloc
 
     @classmethod
     def from_oms(
@@ -237,19 +203,43 @@ class SpectrumMap(BaseMap):
         ms1_bag = ms1_bag.map(cls.ms1spec2dfdict)
         ms2_bag = ms2_bag.map(cls.ms2spec2dfdict)
         ms1,ms2 = dask.compute(ms1_bag,ms2_bag,scheduler=worker_type,num_workers=num_workers)
-        ms1_df = pl.DataFrame(ms1)
+        ms1_df = pl.DataFrame(ms1,schema={
+            "spec_id":pl.Int32,
+            "rt":pl.Float32,
+            "mz_array":pl.List(pl.Float32),
+            "intensity_array":pl.List(pl.Float32),
+        })
         ms1_df = ms1_df.with_columns(
-            (pl.col('rt') / 60.0).cast(pl.Float32),
+            (pl.col('rt') / 60.0),
         )
-        ms1_index = pd.Index(ms1_df['spec_id'])
-        ms2_df = pl.DataFrame(ms2)
+        ms1_index = gpd.GeoDataFrame(
+            {"iloc":range(len(ms1_df))},
+            index=ms1_df['spec_id'],
+            geometry=gpd.points_from_xy(
+                x=ms1_df['rt'],
+                y=[0] * len(ms1_df),
+            )
+        )
+        ms2_df = pl.DataFrame(ms2,schema={
+            "spec_id":pl.Int32,
+            "rt":pl.Float32,
+            "precursor_mz":pl.Float32,
+            "base_peak_mz":pl.Float32,
+            "base_peak_intensity":pl.Float32,
+            "mz_array":pl.List(pl.Float32),
+            "intensity_array":pl.List(pl.Float32),
+        })
         ms2_df = ms2_df.with_columns(
-            (pl.col('rt') / 60.0).cast(pl.Float32),
-            pl.col('precursor_mz').cast(pl.Float32),
-            pl.col('base_peak_mz').cast(pl.Float32),
-            pl.col('base_peak_intensity').cast(pl.Float32),
+            (pl.col('rt') / 60.0),
         )
-        ms2_index = pd.Index(ms2_df['spec_id'])
+        ms2_index = gpd.GeoDataFrame(
+            {"iloc":range(len(ms2_df))},
+            index=ms2_df['spec_id'],
+            geometry=gpd.points_from_xy(
+                x=ms2_df['rt'],
+                y=ms2_df['precursor_mz'],
+            )
+        )
         metadata = cls.get_exp_meta(exp)
         spectrum_map = cls(
             exp_name=exp_name,
@@ -268,24 +258,16 @@ class SpectrumMap(BaseMap):
 
         self_to_save = copy.copy(self)
         self_to_save.ms1_df = self.ms1_df.with_columns(
-            pl.col("mz_array").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("intensity_array").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
+            ("[" + pl.col("mz_array").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("mz_array"),
+            ("[" + pl.col("intensity_array").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("intensity_array"),
         )
         self_to_save.ms2_df = self.ms2_df.with_columns(
-            pl.col("mz_array").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
-            pl.col("intensity_array").map_elements(
-                lambda x: json.dumps(x.tolist()),
-                return_dtype=pl.String,
-            ),
+            ("[" + pl.col("mz_array").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("mz_array"),
+            ("[" + pl.col("intensity_array").cast(pl.List(pl.String)).list.join(",") + "]")
+            .alias("intensity_array"),
         )
 
         super(SpectrumMap, self_to_save).save(save_dir_path)
@@ -298,26 +280,30 @@ class SpectrumMap(BaseMap):
         if 'ms1_df' in data_dict:
             if isinstance(data_dict['ms1_df'], pl.DataFrame):
                 data_dict['ms1_df'] = data_dict['ms1_df'].with_columns(
-                    pl.col("mz_array").map_elements(
-                        lambda x: np.array(json.loads(x)),
-                        return_dtype=pl.Object,
-                    ),
-                    pl.col("intensity_array").map_elements(
-                        lambda x: np.array(json.loads(x)),
-                        return_dtype=pl.Object,
-                    ),
+                    pl.col("mz_array")
+                        .str.strip_chars_start("[")
+                        .str.strip_chars_end("]")
+                        .str.split(",")
+                        .cast(pl.List(pl.Float32)),
+                    pl.col("intensity_array")
+                        .str.strip_chars_start("[")
+                        .str.strip_chars_end("]")
+                        .str.split(",")
+                        .cast(pl.List(pl.Float32)),
                 )
         if 'ms2_df' in data_dict:
             if isinstance(data_dict['ms2_df'], pl.DataFrame):
                 data_dict['ms2_df'] = data_dict['ms2_df'].with_columns(
-                    pl.col("mz_array").map_elements(
-                        lambda x: np.array(json.loads(x)),
-                        return_dtype=pl.Object,
-                    ),
-                    pl.col("intensity_array").map_elements(
-                        lambda x: np.array(json.loads(x)),
-                        return_dtype=pl.Object,
-                    ),
+                    pl.col("mz_array")
+                        .str.strip_chars_start("[")
+                        .str.strip_chars_end("]")
+                        .str.split(",")
+                        .cast(pl.List(pl.Float32)),
+                    pl.col("intensity_array")
+                        .str.strip_chars_start("[")
+                        .str.strip_chars_end("]")
+                        .str.split(",")
+                        .cast(pl.List(pl.Float32)),
                 )
 
         return cls(**data_dict)

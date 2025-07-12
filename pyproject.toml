@@ -23,6 +23,7 @@ pydantic = "*"
 toml = "*"
 rtree = "*"
 polars = "*"
+geopandas = "*"
 
 [tool.ruff]
 line-length = 120

@@ -6,6 +6,7 @@ import os
 import pickle
 from typing import Any
 
+import geopandas as gpd
 import pandas as pd
 import polars as pl
 import rtree
@@ -34,7 +35,8 @@ class BaseMap(BaseModel):
         state = copy.deepcopy(super().__getstate__())
         for k,v in state['__dict__'].items():
             if isinstance(v, pl.DataFrame):
-                state['__dict__'][k] = v.to_pandas()
+                if any(tp == pl.Object for tp in v.dtypes):
+                    state['__dict__'][k] = v.to_pandas()
         return state
 
     def __setstate__(self, state):
@@ -85,6 +87,8 @@ class BaseMap(BaseModel):
                 elif isinstance(getattr(self, k), pd.Index):
                     index_save_path = os.path.join(index_dir_path, k+".csv")
                     pd.Series(getattr(self, k)).to_csv(index_save_path, header=False)
+                elif isinstance(getattr(self, k), gpd.GeoDataFrame):
+                    getattr(self, k).to_parquet(os.path.join(index_dir_path, k+".parquet"))
                 else:
                     other_index_save_path = os.path.join(index_dir_path, k+".pkl")
                     with open(other_index_save_path, 'wb') as f:
@@ -139,6 +143,10 @@ class BaseMap(BaseModel):
                         index_save_path = os.path.join(index_dir_path, k+".csv")
                         if os.path.exists(index_save_path):
                             data_dict[k] = pd.Index(pd.read_csv(index_save_path, header=None, index_col=0).iloc[:,0])
+                    elif f.annotation == gpd.GeoDataFrame or f.annotation == gpd.GeoDataFrame | None:
+                        index_save_path = os.path.join(index_dir_path, k+".parquet")
+                        if os.path.exists(index_save_path):
+                            data_dict[k] = gpd.read_parquet(index_save_path)
                     else:
                         other_index_save_path = os.path.join(index_dir_path, k+".pkl")
                         if os.path.exists(other_index_save_path):
