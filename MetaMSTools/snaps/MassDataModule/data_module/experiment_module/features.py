@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Literal
+from typing import ClassVar, Literal
 
 import dask
 import dask.bag as db
@@ -15,6 +15,25 @@ from .ABCs import BaseMap
 
 
 class FeatureMap(BaseMap):
+
+    table_schema: ClassVar[dict[str, dict]] = {
+        "feature_info": {
+                "RT": pl.Float32,
+                "mz": pl.Float32,
+                "intensity": pl.Float32,
+                "MZstart": pl.Float32,
+                "RTstart": pl.Float32,
+                "MZend": pl.Float32,
+                "RTend": pl.Float32,
+                "hull_num": pl.Int8,
+        },
+        "hull_info": {
+            "RTstart": pl.Float32,
+            "RTend": pl.Float32,
+            "MZstart": pl.Float32,
+            "MZend": pl.Float32,
+        }
+    }
 
     feature_index: gpd.GeoDataFrame | None = Field(
         default=None,
@@ -88,6 +107,11 @@ class FeatureMap(BaseMap):
             },
             include_index=True
         )
+        feature_info = feature_info.with_columns(
+            (pl.col("RT") / 60).alias("RT"),
+            (pl.col("RTstart") / 60).alias("RTstart"),
+            (pl.col("RTend") / 60).alias("RTend"),
+        )
         feature_bag = db.from_sequence(feature_map, npartitions=num_workers)
         feature_metadata_bag = feature_bag.map(FeatureMap.get_feature_metadata)
         feature_metadata_list = dask.compute(
@@ -105,6 +129,7 @@ class FeatureMap(BaseMap):
         )
         feature_metadata_df = feature_metadata_df.with_columns(
             pl.col("isotope_pattern").list.eval(pl.element().cum_sum()),
+            pl.col("hull_rt").list.eval(pl.element() / 60),
         )
         if "adduct_mass" in feature_metadata_df.columns:
             feature_metadata_df = feature_metadata_df.with_columns(
@@ -144,6 +169,9 @@ class FeatureMap(BaseMap):
                 'mz_points': pl.List(pl.Float32),
                 'intens_points': pl.List(pl.Float32),
             }
+        )
+        hull_info = hull_info.with_columns(
+            pl.col("rt_points").list.eval(pl.element() / 60),
         )
         hull_info = hull_info.with_columns(
             pl.col("rt_points").list.min().alias("RTstart"),

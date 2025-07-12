@@ -20,6 +20,19 @@ from .ABCs import BaseMap
 class SpectrumMap(BaseMap):
 
     scan_id_matcher: ClassVar[Pattern] = re.compile(r'scan=(\d+)')
+    table_schema: ClassVar[dict[str, dict]] = {
+        "ms1_df": {
+            "spec_id":pl.String,
+            "rt":pl.Float32,
+        },
+        "ms2_df": {
+            "spec_id":pl.String,
+            "rt":pl.Float32,
+            "precursor_mz":pl.Float32,
+            "base_peak_mz":pl.Float32,
+            "base_peak_intensity":pl.Float32,
+        }
+    }
 
     ms1_index: gpd.GeoDataFrame | None = Field(
         default=None,

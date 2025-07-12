@@ -4,7 +4,7 @@ import copy
 import json
 import os
 import pickle
-from typing import Any
+from typing import Any, ClassVar
 
 import geopandas as gpd
 import pandas as pd
@@ -17,6 +17,8 @@ from sqlalchemy import create_engine, text
 class BaseMap(BaseModel):
 
     model_config = ConfigDict({"arbitrary_types_allowed": True})
+
+    table_schema: ClassVar[dict[str, dict]] = {}
 
     exp_name: str = Field(
         ...,
@@ -168,7 +170,14 @@ class BaseMap(BaseModel):
                                         AND name='{k}'"
                                 )).fetchone() is not None:
                                     if f.annotation == pl.DataFrame or f.annotation == pl.DataFrame | None:
-                                        data_dict[k] = pl.read_database(query=f"SELECT * FROM {k}", connection=conn)
+                                        if k in cls.table_schema:
+                                            table_schema = cls.table_schema[k]
+                                        else:
+                                            table_schema = None
+                                        data_dict[k] = pl.read_database(
+                                            query=f"SELECT * FROM {k}", connection=conn,
+                                            schema_overrides=table_schema
+                                        )
                                     elif f.annotation == pd.DataFrame or f.annotation == pd.DataFrame | None:
                                         data_dict[k] = pd.read_sql_query(f"SELECT * FROM {k}", conn)
                         else:
@@ -184,4 +193,3 @@ class BaseMap(BaseModel):
     def load(cls, save_dir_path: str):
 
         return cls(**cls._base_load(save_dir_path))
-
