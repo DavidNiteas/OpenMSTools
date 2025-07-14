@@ -1,11 +1,10 @@
-from ..snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
 from ..snaps.MassDataModule.data_module.experiment_module import (
     ConsensusMap,
     FeatureMap,
     SpectrumMap,
     XICMap,
-    link_ms2_and_feature_map,
 )
+from ..snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 from .ABCs import (
     ConvertMethodConfig,
     MSTool,
@@ -49,7 +48,6 @@ __all__ = [
     "FeatureMap",
     "XICMap",
     "ConsensusMap",
-    "link_ms2_and_feature_map",
     "ConvertMethodConfig",
     "MSTool",
     "MSToolConfig",

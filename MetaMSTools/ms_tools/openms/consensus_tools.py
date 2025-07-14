@@ -4,8 +4,8 @@ import pyopenms as oms
 from pydantic import Field
 
 from ...snaps.MassDataModule.data_module.configs import ConvertMethodConfig, OpenMSMethodConfig
-from ...snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
 from ...snaps.MassDataModule.data_module.openms_module import OpenMSMethodParamWrapper
+from ...snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 from ..ABCs import MSTool
 
 

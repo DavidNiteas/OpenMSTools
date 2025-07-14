@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from ..snaps.MassDataModule.data_module.configs import ConvertMethodConfig, OpenMSMethodConfig, TomlConfig
-from ..snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
+from ..snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 
 
 class MSToolConfig(TomlConfig):

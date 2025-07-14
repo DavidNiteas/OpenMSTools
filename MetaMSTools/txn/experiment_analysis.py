@@ -25,7 +25,7 @@ from ..ms_tools import (
     TICSmootherConfig,
 )
 from ..snaps.MassDataModule.data_module import ConsensusMap, FeatureMap, SpectrumMap, XICMap, link_ms2_and_feature_map
-from ..snaps.MassDataModule.data_module.data_wrapper import MetaMSDataWrapper, OpenMSDataWrapper
+from ..snaps.MassDataModule.data_module.wrappers import MetaMSDataWrapper, OpenMSDataWrapper
 from .reference_analysis import ReferenceFeatureFinder, ReferenceFeatureFinderConfig
 
 

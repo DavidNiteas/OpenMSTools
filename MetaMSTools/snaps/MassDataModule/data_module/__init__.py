@@ -1,7 +1,8 @@
 from .configs import ConvertMethodConfig, OpenMSMethodConfig, TomlConfig
-from .data_wrapper import MetaMSDataWrapper, OpenMSDataWrapper
-from .experiment_module import ConsensusMap, FeatureMap, SpectrumMap, XICMap, link_ms2_and_feature_map
+from .experiment_module import ConsensusMap, FeatureMap, SpectrumMap, XICMap
+from .linker_module import link_ms2_and_feature_map
 from .openms_module.io import load_exp_file
+from .wrappers import MetaMSDataWrapper, OpenMSDataWrapper
 
 __all__ = [
     "OpenMSMethodConfig",

@@ -12,8 +12,8 @@ from ..ms_tools import (
     MSTool,
     MSToolConfig,
 )
-from ..snaps.MassDataModule.data_module.data_wrapper import OpenMSDataWrapper
 from ..snaps.MassDataModule.data_module.experiment_module import ConsensusMap, FeatureMap
+from ..snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 
 
 class ReferenceFeatureFinderConfig(MSToolConfig):
