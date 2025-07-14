@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+import polars as pl
 from pydantic import Field
 
 from ..module_abc import BaseWrapper
@@ -29,7 +30,7 @@ class MetaMSDataWrapper(BaseWrapper):
         None,
         description="原始文件路径列表"
     )
-    exp_names: list[str] | None = Field(
+    exp_names: pl.Series | None = Field(
         None,
         description="实验名称列表"
     )
@@ -60,7 +61,7 @@ class MetaMSExperimentDataQueue(MetaMSDataWrapper):
         ...,
         description="原始文件路径列表"
     )
-    exp_names: list[str] = Field(
+    exp_names: pl.Series = Field(
         ...,
         description="实验名称列表"
     )

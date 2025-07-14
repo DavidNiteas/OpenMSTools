@@ -2,7 +2,7 @@ from .spectrums import SpectrumMap # noqa: I001
 from .features import FeatureMap
 from .consensus import ConsensusMap
 from .xic import XICMap
-from .wrappers import MetaMSDataWrapper
+from .wrappers import MetaMSDataWrapper,MetaMSExperimentDataQueue
 
 __all__ = [
     "SpectrumMap",
@@ -10,4 +10,5 @@ __all__ = [
     "ConsensusMap",
     "XICMap",
     "MetaMSDataWrapper",
+    "MetaMSExperimentDataQueue",
 ]

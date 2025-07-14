@@ -64,9 +64,9 @@ def link_ms2_to_feature(
     return spectrum_id_list
 
 def link_ms2_and_feature_map(
-    feature_map: FeatureMap,
     spectrum_map: SpectrumMap,
-    key_id: Literal["feature","spectrum"] = "feature",
+    feature_map: FeatureMap,
+    key_id: Literal["feature","spectrum"] = "spectrum",
     worker_type: Literal["threads","processes","synchronous"] = "threads",
     num_workers: int | None = None,
 ) -> pl.DataFrame:
@@ -81,15 +81,15 @@ def link_ms2_and_feature_map(
     mapping_df = pl.DataFrame(
         data = {
             "feature_id": feature_map.feature_info['feature_id'],
-            "spectrum_id": spectrum_id_list,
+            "ms2_id": spectrum_id_list,
         },
         schema=pl.Schema({
             "feature_id": pl.String,
-            "spectrum_id": pl.List(pl.String),
+            "ms2_id": pl.List(pl.String),
         })
     )
     if key_id == "spectrum":
-        mapping_df = mapping_df.explode("spectrum_id").filter(
-            pl.col("spectrum_id").is_not_null()
-        ).select(["spectrum_id", "feature_id"])
+        mapping_df = mapping_df.explode("ms2_id").filter(
+            pl.col("ms2_id").is_not_null()
+        ).select(["ms2_id", "feature_id"])
     return mapping_df

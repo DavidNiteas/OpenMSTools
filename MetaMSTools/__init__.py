@@ -22,7 +22,6 @@ from .ms_tools import (
     TICSmootherConfig,
     TomlConfig,
     XICMap,
-    link_ms2_and_feature_map,
 )
 
 __all__ = [
@@ -45,7 +44,6 @@ __all__ = [
     "FeatureMap",
     "XICMap",
     "ConsensusMap",
-    "link_ms2_and_feature_map",
     "ConvertMethodConfig",
     "MSTool",
     "MSToolConfig",
