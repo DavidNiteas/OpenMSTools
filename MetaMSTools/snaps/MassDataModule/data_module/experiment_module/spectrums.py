@@ -14,7 +14,7 @@ import polars as pl
 import pyopenms as oms
 from pydantic import Field
 
-from .ABCs import BaseMap
+from ..module_abc.map_ABCs import BaseMap
 
 
 class SpectrumMap(BaseMap):

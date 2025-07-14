@@ -5,8 +5,8 @@ import dask.bag as db
 import pandas as pd
 import polars as pl
 
-from .features import FeatureMap
-from .spectrums import SpectrumMap
+from ..experiment_module.features import FeatureMap
+from ..experiment_module.spectrums import SpectrumMap
 
 
 def infer_sub_hull_from_feature(

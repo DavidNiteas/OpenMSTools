@@ -43,7 +43,7 @@ class BaseMap(BaseModel):
 
     def __setstate__(self, state):
         init_func = []
-        for k,f in self.model_fields.items():
+        for k,f in type(self).model_fields.items():
             if f.annotation == pl.DataFrame or f.annotation == pl.DataFrame | None:
                 if isinstance(state['__dict__'][k], pd.DataFrame):
                     state['__dict__'][k] = pl.from_pandas(state['__dict__'][k])
@@ -74,7 +74,7 @@ class BaseMap(BaseModel):
         engine = create_engine(f"sqlite:///{sqlite_db_path}")
 
         metadata_to_save = {"module_type": self.__class__.__name__}
-        for k,f in self.model_fields.items():
+        for k,f in type(self).model_fields.items():
             if f.json_schema_extra['data_type'] == 'metadata':
                 metadata_to_save[k] = getattr(self, k)
             elif f.json_schema_extra['data_type'] == 'index':

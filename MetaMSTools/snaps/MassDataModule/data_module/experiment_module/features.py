@@ -11,7 +11,7 @@ import pyopenms as oms
 from pydantic import Field
 from shapely.geometry import box
 
-from .ABCs import BaseMap
+from ..module_abc.map_ABCs import BaseMap
 
 
 class FeatureMap(BaseMap):
