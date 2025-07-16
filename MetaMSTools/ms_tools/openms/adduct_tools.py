@@ -174,6 +174,18 @@ class AdductDetectorConfig(OpenMSMethodConfig):
         default=AdductsModeConfig(),
         description="可能的加合物列表，可以是正负向的，也可以是混合的。"
     )
+    worker_type: Literal['threads','synchronous'] = Field(
+        default='threads',
+        is_openms_method_param=False,
+        description="工作模式。\
+            'threads'使用线程池，'synchronous'使用单线程。"
+    )
+    num_workers: int | None = Field(
+        default=None,
+        is_openms_method_param=False,
+        description="并行worker的数量。\
+            如果为None，则使用所有可用的CPU核心。"
+    )
 
     @model_validator(mode="after")
     def adducts_mode_validator(cls, v: Self) -> Self:
@@ -192,9 +204,16 @@ class AdductDetector(MSTool):
         super().__init__(config)
         self.openms_adduct_detector = oms.MetaboliteFeatureDeconvolution()
 
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def __call__(
+        self,
+        data: OpenMSDataWrapper,
+        *args,
+        **kwargs,
+    ) -> OpenMSDataWrapper:
 
-        self.openms_adduct_detector.setParameters(self.config.param)
+        runtime_config = self.config.get_runtime_config(**kwargs)
+
+        self.openms_adduct_detector.setParameters(runtime_config.param)
 
         if len(data.features) == 0:
             return data
@@ -208,9 +227,12 @@ class AdductDetector(MSTool):
             inputs = (data.features[0], oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap())
             data.features[0] = run_adduct_detector(inputs)
         else:
-            features_bag = db.from_sequence(data.features)
+            features_bag = db.from_sequence(data.features, npartitions=runtime_config.num_workers)
             inputs_bag = features_bag.map(lambda x: (x, oms.FeatureMap(), oms.ConsensusMap(), oms.ConsensusMap()))
             outputs_bag = inputs_bag.map(run_adduct_detector)
-            data.features = outputs_bag.compute(scheduler="threads")
+            data.features = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data

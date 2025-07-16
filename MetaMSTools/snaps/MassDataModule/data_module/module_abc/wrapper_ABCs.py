@@ -1,9 +1,9 @@
 from typing import ClassVar, TypeVar
 
+import polars as pl
 from pydantic import BaseModel, ConfigDict
 from typing_extensions import Self
 
-data_wrapper_type = TypeVar("data_wrapper_type", bound="BaseWrapper")
 wrapper_item_obj_type = TypeVar("_wrapper_item_obj_type")
 
 class BaseWrapper(BaseModel):
@@ -43,18 +43,24 @@ class BaseWrapper(BaseModel):
         return data_wrappers
 
     @staticmethod
-    def _merge_step(obj_1: list | None, obj_2: list | None) -> list | None:
+    def _merge_step(obj_1: list | pl.Series | None, obj_2: list | pl.Series | None) -> list | pl.Series | None:
         if obj_1 is None and obj_2 is None:
             return None
         elif obj_1 is None and obj_2 is not None:
             return obj_2
         elif obj_1 is not None and obj_2 is None:
-            return obj_1 + [obj_2]
+            if isinstance(obj_1, list):
+                return obj_1 + [obj_2]
+            else:
+                pl.concat([obj_1, [obj_2]])
         else:
-            return obj_1 + obj_2
+            if isinstance(obj_1, list):
+                return obj_1 + obj_2
+            else:
+                return pl.concat([obj_1, obj_2])
 
     @classmethod
-    def merge(cls, data_wrappers: list[data_wrapper_type]) -> data_wrapper_type:
+    def merge(cls, data_wrappers: list[Self]) -> Self:
         merged_data_dict = {
             attr_name: None \
                 for attr_name in cls.model_fields

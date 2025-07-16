@@ -46,8 +46,8 @@ class ConsensusMap(BaseMap):
     @classmethod
     def from_oms(
         cls,
-        consensus_map: oms.ConsensusMap,
         queue_name: str,
+        consensus_map: oms.ConsensusMap,
         worker_type: Literal["threads", "processes", "synchronous"] = "threads",
         num_workers: int | None = None,
     ) -> ConsensusMap:

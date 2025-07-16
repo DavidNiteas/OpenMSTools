@@ -37,6 +37,22 @@ class TomlConfig(BaseModel):
     def from_toml(cls, path: str) -> Self:
         return cls.from_dict(toml.load(path))
 
+    def update(
+        self,
+        **kwargs,
+    ):
+        for key, value in kwargs.items():
+            if key in type(self).model_fields:
+                if isinstance(value, type(self).model_fields[key].annotation):
+                    setattr(self, key, value)
+
+    def get_runtime_config(
+        self,
+        **kwargs,
+    ) -> Self:
+        runtime_config = self.model_copy(update=kwargs)
+        return runtime_config
+
 class ConvertMethodConfig(TomlConfig):
 
     configs_type: ClassVar[dict[str, TomlConfig]] = {}

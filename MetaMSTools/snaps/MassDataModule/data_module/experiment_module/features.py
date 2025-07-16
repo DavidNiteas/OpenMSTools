@@ -194,14 +194,17 @@ class FeatureMap(BaseMap):
     @classmethod
     def from_oms(
         cls,
-        feature_map: oms.FeatureMap,
-        feature_xic: list[list[oms.MSChromatogram]],
         exp_name: str,
+        feature_map: oms.FeatureMap,
+        feature_xic: list[list[oms.MSChromatogram]] | None = None,
         worker_type: Literal["threads", "processes", "synchronous"] = "threads",
         num_workers: int | None = None,
     ) -> FeatureMap:
         feature_info = cls.get_feature_info(feature_map, worker_type, num_workers)
-        hull_info = cls.get_hulls(feature_map, feature_xic)
+        if feature_xic is not None:
+            hull_info = cls.get_hulls(feature_map, feature_xic)
+        else:
+            hull_info = None
         feature_info = feature_info.with_columns(
             (f"{exp_name}::" + pl.col("feature_id").cast(str)).alias("feature_id"),
         )
@@ -218,22 +221,25 @@ class FeatureMap(BaseMap):
                     )
             ],
         )
-        hull_info = hull_info.with_columns(
-            (f"{exp_name}::" + pl.col("hull_id").cast(str)).alias("hull_id"),
-        )
-        hull_index = gpd.GeoDataFrame(
-            {"iloc": range(len(hull_info))},
-            index=hull_info["hull_id"].to_list(),
-            geometry=[
-                box(rt_start, mz_start, rt_end, mz_end) \
-                    for rt_start, mz_start, rt_end, mz_end in zip(
-                        hull_info["RTstart"],
-                        hull_info["MZstart"],
-                        hull_info["RTend"],
-                        hull_info["MZend"],
-                    )
-            ]
-        )
+        if hull_info is not None:
+            hull_info = hull_info.with_columns(
+                (f"{exp_name}::" + pl.col("hull_id").cast(str)).alias("hull_id"),
+            )
+            hull_index = gpd.GeoDataFrame(
+                {"iloc": range(len(hull_info))},
+                index=hull_info["hull_id"].to_list(),
+                geometry=[
+                    box(rt_start, mz_start, rt_end, mz_end) \
+                        for rt_start, mz_start, rt_end, mz_end in zip(
+                            hull_info["RTstart"],
+                            hull_info["MZstart"],
+                            hull_info["RTend"],
+                            hull_info["MZend"],
+                        )
+                ]
+            )
+        else:
+            hull_index = None
         return cls(
             exp_name=exp_name,
             feature_info=feature_info,
@@ -309,14 +315,15 @@ class FeatureMap(BaseMap):
             .alias("isotope_pattern"),
         )
 
-        self_to_save.hull_info = self.hull_info.with_columns(
-            ("[" + pl.col("rt_points").cast(pl.List(pl.String)).list.join(",") + "]")
-            .alias("rt_points"),
-            ("[" + pl.col("mz_points").cast(pl.List(pl.String)).list.join(",") + "]")
-            .alias("mz_points"),
-            ("[" + pl.col("intens_points").cast(pl.List(pl.String)).list.join(",") + "]")
-            .alias("intens_points"),
-        )
+        if self_to_save.hull_info is not None:
+            self_to_save.hull_info = self.hull_info.with_columns(
+                ("[" + pl.col("rt_points").cast(pl.List(pl.String)).list.join(",") + "]")
+                .alias("rt_points"),
+                ("[" + pl.col("mz_points").cast(pl.List(pl.String)).list.join(",") + "]")
+                .alias("mz_points"),
+                ("[" + pl.col("intens_points").cast(pl.List(pl.String)).list.join(",") + "]")
+                .alias("intens_points"),
+            )
 
         super(FeatureMap, self_to_save).save(save_dir_path)
 

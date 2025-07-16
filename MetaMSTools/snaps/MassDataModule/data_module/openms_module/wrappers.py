@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import dask
 import dask.bag as db
@@ -66,9 +66,9 @@ class OpenMSDataWrapper(BaseWrapper):
         None,
         description="每个实验文件中找到的特征图（OpenMS的FeatureMap对象）列表"
     )
-    ref_feature_for_align: oms.FeatureMap | None = Field(
+    ref_for_align: oms.FeatureMap | oms.MSExperiment | None = Field(
         None,
-        description="用于对齐的参考特征图（OpenMS的FeatureMap对象）"
+        description="用于RT对齐的参考样本"
     )
     trafos: list[oms.TransformationDescription] | None = Field(
         None,
@@ -83,24 +83,22 @@ class OpenMSDataWrapper(BaseWrapper):
         description="质谱数据队列的名称"
     )
 
-    def init_exps(self):
+    def init_exps(
+        self,
+        worker_type: Literal["threads", "synchronous"] = "threads",
+        num_workers: int | None = None,
+    ):
 
         if self.file_paths is not None:
-            file_bag = db.from_sequence(self.file_paths)
+            file_bag = db.from_sequence(self.file_paths, npartitions=num_workers)
             file_bag = file_bag.map(load_exp_file)
             exp_name_bag = file_bag.pluck(0)
             exp_bag = file_bag.pluck(1)
-            self.exp_names, self.exps = dask.compute(exp_name_bag, exp_bag, scheduler='threads')
-
-    def infer_ref_feature_for_align(self):
-
-        max_feature_num = 0
-        max_feature_map = None
-        for feature_map in self.features:
-            if feature_map.size() > max_feature_num:
-                max_feature_num = feature_map.size()
-                max_feature_map = feature_map
-        self.ref_feature_for_align = max_feature_map
+            self.exp_names, self.exps = dask.compute(
+                exp_name_bag, exp_bag,
+                scheduler=worker_type,
+                num_workers=num_workers,
+            )
 
 class OpenMSExperimentDataQueue(OpenMSDataWrapper):
 

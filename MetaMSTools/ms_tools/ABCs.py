@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 from ..snaps.MassDataModule.data_module.configs import ConvertMethodConfig, OpenMSMethodConfig, TomlConfig
-from ..snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 
 
 class MSToolConfig(TomlConfig):
@@ -28,6 +27,16 @@ class MSTool(ABC):
         else:
             self.config = config
 
+    def init_runtime_config(
+        self,
+        **kwargs
+    ):
+        return self.config.get_runtime_config(**kwargs)
+
     @abstractmethod
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def __call__(
+        self,
+        *args,
+        **kwargs,
+    ):
         pass

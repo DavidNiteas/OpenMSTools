@@ -95,6 +95,18 @@ class CentrizerConfig(OpenMSMethodConfig):
     SignalToNoise: SignalToNoiseConfig = Field(
         default=SignalToNoiseConfig(), description="用于信号噪声估计的参数"
     )
+    worker_type: Literal['threads','synchronous'] = Field(
+        default='threads',
+        is_openms_method_param=False,
+        description="工作模式。\
+            'threads'使用线程池，'synchronous'使用单线程。"
+    )
+    num_workers: int | None = Field(
+        default=None,
+        is_openms_method_param=False,
+        description="并行worker的数量。\
+            如果为None，则使用所有可用的CPU核心。"
+    )
 
     @property
     def is_legal_ms_levels(self) -> bool:
@@ -126,7 +138,9 @@ class Centrizer(MSTool):
         super().__init__(config)
         self.peak_picker = oms.PeakPickerHiRes()
 
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def __call__(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(** kwargs)
+        self.peak_picker.setParameters(runtime_config.param)
 
         if len(data.exps) == 0:
             return data
@@ -139,8 +153,10 @@ class Centrizer(MSTool):
         if len(data.exps) == 1:
             data.exps = [run_centrization(data.exps[0])]
         else:
-            inputs_bag = db.from_sequence(data.exps)
+            inputs_bag = db.from_sequence(data.exps, npartitions=runtime_config.num_workers)
             outputs_bag = inputs_bag.map(run_centrization)
-            data.exps = outputs_bag.compute(scheduler="threads")
+            data.exps = outputs_bag.compute(
+                scheduler=runtime_config.worker_type, num_workers=runtime_config.num_workers
+            )
 
         return data

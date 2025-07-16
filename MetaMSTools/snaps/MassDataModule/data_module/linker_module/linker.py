@@ -4,7 +4,7 @@ import polars as pl
 from pydantic import Field
 from typing_extensions import Self
 
-from ..experiment_module import ConsensusMap, FeatureMap, MetaMSExperimentDataQueue, SpectrumMap
+from ..experiment_module import ConsensusMap, FeatureMap, SpectrumMap
 from ..module_abc import BaseLinker
 from .link_func import link_ms2_and_feature_map
 
@@ -109,31 +109,44 @@ class QueueLevelLinker(BaseLinker):
         self,
         consensus_map: ConsensusMap,
     ) -> None:
-        feature_consensus_mapping = consensus_map.consensus_info.select(['feature_id', 'consensus_id'])
-        feature_consensus_mapping = feature_consensus_mapping.explode('feature_id')
+        feature_consensus_mapping = consensus_map.consensus_info.select(['feature_ids', 'consensus_id'])
+        feature_consensus_mapping = feature_consensus_mapping.explode('feature_ids')
+        feature_consensus_mapping.columns = ['feature_id', 'consensus_id']
         self.feature_consensus_mapping = feature_consensus_mapping
 
     def link_exp_data(
         self,
-        queue_data: MetaMSExperimentDataQueue,
+        exp_names: list[str] | None = None,
+        spectrum_maps: list[SpectrumMap] | None = None,
+        feature_maps: list[FeatureMap] | None = None,
+        consensus_map: ConsensusMap | None = None,
     ):
-        self.queue_name = queue_data.queue_name
-        self.exp_names = queue_data.exp_names
-        for exp_name, spectrum_map, feature_map in zip(
-            self.exp_names,
-            queue_data.spectrum_maps,
-            queue_data.feature_maps,
-        ):
-            sample_level_linker = SampleLevelLinker(exp_name=exp_name)
-            sample_level_linker.link(spectrum_map, feature_map)
-            self.sample_level_linkers.append(sample_level_linker)
-        if queue_data.consensus_map is not None:
-            self.link_feature_consensus(queue_data.consensus_map)
+        if exp_names is not None:
+            self.exp_names = pl.Series(exp_names)
+        if self.exp_names is not None:
+            if spectrum_maps is None:
+                spectrum_maps = [None] * len(self.exp_names)
+            if feature_maps is None:
+                feature_maps = [None] * len(self.exp_names)
+            for exp_name, spectrum_map, feature_map in zip(
+                self.exp_names, spectrum_maps, feature_maps
+            ):
+                sample_level_linker = SampleLevelLinker(exp_name=exp_name)
+                sample_level_linker.link_exp_data(spectrum_map, feature_map)
+                self.sample_level_linkers.append(sample_level_linker)
+            if consensus_map is not None:
+                self.link_feature_consensus(consensus_map)
 
     @classmethod
     def link_exp_data_from_cls(
         cls,
-        queue_data: MetaMSExperimentDataQueue,
+        queue_name: str,
+        exp_names: list[str] | None = None,
+        spectrum_maps: list[SpectrumMap] | None = None,
+        feature_maps: list[FeatureMap] | None = None,
+        consensus_map: ConsensusMap | None = None,
     ) -> Self:
-        linker = cls(queue_name=queue_data.queue_name)
-        linker.link_exp_data(queue_data)
+        linker = cls(queue_name=queue_name)
+        linker.link_exp_data(
+            exp_names, spectrum_maps, feature_maps, consensus_map
+        )

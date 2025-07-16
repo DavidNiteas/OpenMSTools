@@ -369,9 +369,15 @@ class FeatureLinker(MSTool):
 
     def __init__(self, config: FeatureLinkerConfig | None = None):
         super().__init__(config)
-        self.feature_linker = self.config.config.openms_method()
 
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def __call__(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config: FeatureLinkerConfig = self.config.get_runtime_config(**kwargs)
+        runtime_linker_config:FeatureGroupingAlgorithmQTConfig |\
+            FeatureGroupingAlgorithmKDConfig |\
+            FeatureGroupingAlgorithmUnlabeledConfig |\
+            FeatureGroupingAlgorithmLabeledConfig = runtime_config.config.get_runtime_config(**kwargs)
+        feature_linker = runtime_linker_config.openms_method()
+        feature_linker.setParameters(runtime_linker_config.param)
         consensus_map = oms.ConsensusMap()
         file_descriptions = consensus_map.getColumnHeaders()
         for i,(exp_name, feature_map) in enumerate(zip(data.exp_names, data.features)):
@@ -381,6 +387,6 @@ class FeatureLinker(MSTool):
             file_description.unique_id = feature_map.getUniqueId()
             file_descriptions[i] = file_description
         consensus_map.setColumnHeaders(file_descriptions)
-        self.feature_linker.group(data.features, consensus_map)
+        feature_linker.group(data.features, consensus_map)
         data.consensus_map = consensus_map
         return data

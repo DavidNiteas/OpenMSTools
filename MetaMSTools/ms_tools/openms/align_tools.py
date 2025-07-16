@@ -141,6 +141,18 @@ class RTAlignerConfig(OpenMSMethodConfig):
         default=SuperimposerConfig(), description="对齐的参数设置"
     )
     pairfinder: PairfinderConfig = Field(default=PairfinderConfig(), description="配对的参数设置")
+    worker_type: Literal['threads','synchronous'] = Field(
+        default='threads',
+        is_openms_method_param=False,
+        description="工作模式。\
+            'threads'使用线程池，'synchronous'使用单线程。"
+    )
+    num_workers: int | None = Field(
+        default=None,
+        is_openms_method_param=False,
+        description="并行worker的数量。\
+            如果为None，则使用所有可用的CPU核心。"
+    )
 
 class RTAligner(MSTool):
 
@@ -152,10 +164,10 @@ class RTAligner(MSTool):
         self.openms_aligner = oms.MapAlignmentAlgorithmPoseClustering()
         self.transformer = oms.MapAlignmentTransformer()
 
-    def infer_trafo(self, data: OpenMSDataWrapper) -> oms.TransformationDescription:
-
-        self.openms_aligner.setParameters(self.config.param)
-        self.openms_aligner.setReference(data.ref_feature_for_align)
+    def infer_trafo(self, data: OpenMSDataWrapper, **kwargs) -> oms.TransformationDescription:
+        runtime_config = self.config.get_runtime_config(** kwargs)
+        self.openms_aligner.setParameters(runtime_config.param)
+        self.openms_aligner.setReference(data.ref_for_align)
 
         if len(data.features) == 0:
             return data
@@ -169,14 +181,18 @@ class RTAligner(MSTool):
             inputs = (data.features[0], oms.TransformationDescription())
             data.trafos = [run_infer_trafo(inputs)]
         else:
-            features_bag = db.from_sequence(data.features)
+            features_bag = db.from_sequence(data.features, npartitions=runtime_config.num_workers)
             inputs_bag = features_bag.map(lambda x: (x, oms.TransformationDescription()))
             outputs_bag = inputs_bag.map(run_infer_trafo)
-            data.trafos = outputs_bag.compute(scheduler="threads")
+            data.trafos = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def align_features(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def align_features(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(** kwargs)
 
         if len(data.features) == 0:
             return data
@@ -190,13 +206,17 @@ class RTAligner(MSTool):
             inputs = (data.features[0], data.trafos[0])
             data.features = [run_align_features(inputs)]
         else:
-            inputs_bag = db.from_sequence(zip(data.features, data.trafos))
+            inputs_bag = db.from_sequence(zip(data.features, data.trafos), npartitions=runtime_config.num_workers)
             outputs_bag = inputs_bag.map(run_align_features)
-            data.features = outputs_bag.compute(scheduler="threads")
+            data.features = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def align_exps(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
+    def align_exps(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(** kwargs)
 
         if len(data.exps) == 0:
             return data
@@ -210,16 +230,17 @@ class RTAligner(MSTool):
             inputs = (data.exps[0], data.trafos[0])
             data.exps = [run_align_exps(inputs)]
         else:
-            inputs_bag = db.from_sequence(zip(data.exps, data.trafos))
+            inputs_bag = db.from_sequence(zip(data.exps, data.trafos), npartitions=runtime_config.num_workers)
             outputs_bag = inputs_bag.map(run_align_exps)
-            data.exps = outputs_bag.compute(scheduler="threads")
+            data.exps = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-
-        data = self.infer_trafo(data)
-        data = self.align_features(data)
-        data = self.align_exps(data)
-
+    def __call__(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        data = self.infer_trafo(data,** kwargs)
+        data = self.align_features(data, **kwargs)
+        data = self.align_exps(data,** kwargs)
         return data

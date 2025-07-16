@@ -156,6 +156,18 @@ class FeatureFinderConfig(MSToolConfig):
     feature_finding_metabo: FeatureFindingMetaboConfig = Field(
         default=FeatureFindingMetaboConfig(), description="质量特征检测配置"
     )
+    worker_type: Literal['threads','synchronous'] = Field(
+        default='threads',
+        is_openms_method_param=False,
+        description="工作模式。\
+            'threads'使用线程池，'synchronous'使用单线程。"
+    )
+    num_workers: int | None = Field(
+        default=None,
+        is_openms_method_param=False,
+        description="并行worker的数量。\
+            如果为None，则使用所有可用的CPU核心。"
+    )
 
 class FeatureFinder(MSTool):
 
@@ -168,9 +180,9 @@ class FeatureFinder(MSTool):
         self.elution_peak_detector = oms.ElutionPeakDetection()
         self.feature_finder = oms.FeatureFindingMetabo()
 
-    def dectect_mass_traces(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-
-        self.mass_trace_dectecotr.setParameters(self.config.mass_trace_detection.param)
+    def dectect_mass_traces(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(**kwargs)
+        self.mass_trace_dectecotr.setParameters(runtime_config.mass_trace_detection.param)
 
         if len(data.exps) == 0:
             return data
@@ -183,15 +195,18 @@ class FeatureFinder(MSTool):
         if len(data.exps) == 1:
             data.mass_traces = [run_dectect_mass_traces(data.exps[0])]
         else:
-            inputs_bag = db.from_sequence(data.exps)
+            inputs_bag = db.from_sequence(data.exps, npartitions=runtime_config.num_workers)
             outputs_bag = inputs_bag.map(run_dectect_mass_traces)
-            data.mass_traces = outputs_bag.compute(scheduler="threads")
+            data.mass_traces = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def detect_elution_peaks(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-
-        self.elution_peak_detector.setParameters(self.config.elution_peak_detection.param)
+    def detect_elution_peaks(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(** kwargs)
+        self.elution_peak_detector.setParameters(runtime_config.elution_peak_detection.param)
 
         if len(data.mass_traces) == 0:
             return data
@@ -209,15 +224,18 @@ class FeatureFinder(MSTool):
         if len(data.mass_traces) == 1:
             data.mass_traces = [run_detect_elution_peaks(data.mass_traces[0])]
         else:
-            inputs_bag = db.from_sequence(data.mass_traces)
+            inputs_bag = db.from_sequence(data.mass_traces, npartitions=runtime_config.num_workers)
             outputs_bag = inputs_bag.map(run_detect_elution_peaks)
-            data.mass_traces = outputs_bag.compute(scheduler="threads")
+            data.mass_traces = outputs_bag.compute(
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def find_features(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-
-        self.feature_finder.setParameters(self.config.feature_finding_metabo.param)
+    def find_features(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        runtime_config = self.config.get_runtime_config(** kwargs)
+        self.feature_finder.setParameters(runtime_config.feature_finding_metabo.param)
 
         if len(data.mass_traces) == 0:
             return data
@@ -237,14 +255,16 @@ class FeatureFinder(MSTool):
             outputs_bag = inputs_bag.map(run_find_features)
             features_bag = outputs_bag.pluck(0)
             chromatograms_bag = outputs_bag.pluck(1)
-            data.features,data.chromatogram_peaks = dask.compute(features_bag,chromatograms_bag,scheduler="threads")
+            data.features,data.chromatogram_peaks = dask.compute(
+                features_bag,chromatograms_bag,
+                scheduler=runtime_config.worker_type,
+                num_workers=runtime_config.num_workers
+            )
 
         return data
 
-    def __call__(self, data: OpenMSDataWrapper) -> OpenMSDataWrapper:
-
-        data = self.dectect_mass_traces(data)
-        data = self.detect_elution_peaks(data)
-        data = self.find_features(data)
-
+    def __call__(self, data: OpenMSDataWrapper, **kwargs) -> OpenMSDataWrapper:
+        data = self.dectect_mass_traces(data,** kwargs)
+        data = self.detect_elution_peaks(data, **kwargs)
+        data = self.find_features(data,** kwargs)
         return data
