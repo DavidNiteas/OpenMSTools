@@ -1,18 +1,14 @@
-import os
 from typing import Literal
 
-import dask.bag as db
+import pyopenms as oms
 from pydantic import Field
 
 from ..ms_tools import (
     FeatureFinder,
     FeatureFinderConfig,
-    FeatureLinker,
-    FeatureLinkerConfig,
     MSTool,
     MSToolConfig,
 )
-from ..snaps.MassDataModule.data_module.experiment_module import ConsensusMap, FeatureMap
 from ..snaps.MassDataModule.data_module.wrappers import OpenMSDataWrapper
 
 
@@ -22,27 +18,21 @@ class ReferenceFeatureFinderConfig(MSToolConfig):
         default=FeatureFinderConfig(),
         description="用于检测参考样本中特征的配置参数",
     )
-    feature_linker_config: FeatureLinkerConfig = Field(
-        default=FeatureLinkerConfig(),
-        description="用于链接参考样本中特征的配置参数\
-            如果有多个参考样本且`mode`设置为`consensus`，会使用这一部分参数",
-    )
-    mode: Literal["consensus","max_size_feature"] = Field(
-        default="consensus",
+    mode: Literal["mix","max_size_feature"] = Field(
+        default="mix",
         description="参考特征的选择模式，\
-            `consensus`表示使用共识特征，\
-            `max_size_feature`表示使用特征数最多的样本中的特征图 \
+            `mix`表示使用混合样本，\
+            `max_size_feature`表示使用特征数最多的样本 \
             如果只有一个参考样本，则无论mode如何，都会使用该样本的特征",
     )
-    worker_type: Literal["processes", "threads", "synchronous"] = Field(
-        default="processes",
+    worker_type: Literal["threads", "synchronous"] = Field(
+        default="threads",
         description="使用的工作类型，\
-            `processes`表示使用多进程，\
             `threads`表示使用多线程 \
             `synchronous`表示使用单线程同步调度，在调式时非常有用"
     )
-    num_workers: int = Field(
-        default=os.cpu_count() if os.cpu_count() <= 60 else 60,
+    num_workers: int | None = Field(
+        default=None,
         description="并行计算的线程数/进程数"
     )
 
@@ -51,43 +41,96 @@ class ReferenceFeatureFinder(MSTool):
     config_type = ReferenceFeatureFinderConfig
     config: ReferenceFeatureFinderConfig
 
-    def _single_file_pipeline(
-        self,
-        ref_file_path: str,
-    ) -> FeatureMap:
-        ref_datas = OpenMSDataWrapper(file_paths=[ref_file_path])
-        ref_datas.init_exps()
-        feature_finder = FeatureFinder(config=self.config.feature_finder_config)
-        ref_datas = feature_finder(ref_datas)
-        return FeatureMap.from_oms(ref_datas.features[0],ref_datas.chromatogram_peaks[0],ref_datas.exp_names[0])
+    @staticmethod
+    def _single_func(
+        runtime_config: ReferenceFeatureFinderConfig,
+        data_wrapper: OpenMSDataWrapper,
+        result_type: Literal['feature', 'experiment'] = 'feature'
+    ) -> OpenMSDataWrapper:
+        match result_type:
+            case 'feature':
+                data_wrapper = FeatureFinder(runtime_config.feature_finder_config)(
+                    data_wrapper,
+                    worker_type = runtime_config.worker_type,
+                    num_workers = runtime_config.num_workers,
+                )
+                data_wrapper.ref_for_align = data_wrapper.features[0]
+            case'experiment':
+                data_wrapper.ref_for_align = data_wrapper.exps[0]
+        return data_wrapper
+
+    @staticmethod
+    def _max_size_feature_func(
+        runtime_config: ReferenceFeatureFinderConfig,
+        data_wrapper: OpenMSDataWrapper,
+        result_type: Literal['feature', 'experiment'] = 'feature'
+    ) -> OpenMSDataWrapper:
+        data_wrapper = FeatureFinder(runtime_config.feature_finder_config)(
+            data_wrapper,
+            worker_type = runtime_config.worker_type,
+            num_workers = runtime_config.num_workers,
+        )
+        max_idx = None
+        max_size = 0
+        for i, feature_map in enumerate(data_wrapper.features):
+            if feature_map.size() > max_size:
+                max_idx = i
+                max_size = feature_map.size()
+        match result_type:
+            case 'feature':
+                data_wrapper.ref_for_align = data_wrapper.features[max_idx]
+            case'experiment':
+                data_wrapper.ref_for_align = data_wrapper.exps[max_idx]
+        return data_wrapper
+
+    @staticmethod
+    def _mix_func(
+        runtime_config: ReferenceFeatureFinderConfig,
+        data_wrapper: OpenMSDataWrapper,
+        result_type: Literal['feature', 'experiment'] = 'feature'
+    ) -> OpenMSDataWrapper:
+        mix_exp = oms.MSExperiment()
+        for exp in data_wrapper.exps:
+            for spectrum in exp:
+                mix_exp.addSpectrum(spectrum)
+        mix_data_wrapper = OpenMSDataWrapper(
+            exps=[mix_exp],
+        )
+        match result_type:
+            case 'feature':
+                mix_data_wrapper = FeatureFinder(runtime_config.feature_finder_config)(
+                    mix_data_wrapper,
+                    worker_type = runtime_config.worker_type,
+                    num_workers = runtime_config.num_workers,
+                )
+                data_wrapper.ref_for_align = mix_data_wrapper.features[0]
+            case'experiment':
+                data_wrapper.ref_for_align = mix_exp
+        return data_wrapper
 
     def __call__(
         self,
         ref_file_paths: list[str],
-    ) -> FeatureMap | ConsensusMap:
+        *args,
+        result_type: Literal['feature', 'experiment'] = 'feature',
+        **kwargs,
+    ) -> oms.FeatureMap | oms.MSExperiment:
 
-        if len(ref_file_paths) > 1:
-            ref_file_path_bag = db.from_sequence(ref_file_paths)
-            ref_feature_map_bag = ref_file_path_bag.map(self._single_file_pipeline)
-            ref_feature_map:list[FeatureMap] = ref_feature_map_bag.compute(
-                scheduler=self.config.worker_type,
-                num_workers=self.config.num_workers,
-            )
-            ref_datas = [ref.get_oms_feature_map() for ref in ref_feature_map]
-            ref_datas = OpenMSDataWrapper(
-                exp_names=ref_file_paths,
-                features=ref_datas
-            )
-        else:
-            ref_datas = OpenMSDataWrapper(file_paths=ref_file_paths)
-            ref_datas.init_exps()
-            ref_datas = FeatureFinder(config=self.config.feature_finder_config)(ref_datas)
+        runtime_config = self.config.get_runtime_config(**kwargs)
 
-        if len(ref_datas.features) > 1 and self.config.mode == "consensus":
-            feature_linker = FeatureLinker(config=self.config.feature_linker_config)
-            ref_datas = feature_linker(ref_datas)
-        if ref_datas.consensus_map is not None:
-            return ConsensusMap.from_oms(ref_datas.consensus_map)
+        data_wrapper = OpenMSDataWrapper(
+            file_paths=ref_file_paths,
+        )
+        data_wrapper.init_exps(
+            worker_type=runtime_config.worker_type,
+            num_workers=runtime_config.num_workers,
+        )
+        if len(data_wrapper.exps) > 1:
+            match runtime_config.mode:
+                case'max_size_feature':
+                    data_wrapper = self._max_size_feature_func(runtime_config, data_wrapper, result_type)
+                case'mix':
+                    data_wrapper = self._mix_func(runtime_config, data_wrapper, result_type)
         else:
-            ref_datas.infer_ref_feature_for_align()
-            return FeatureMap.from_oms(ref_datas.ref_feature_for_align)
+            data_wrapper = self._single_func(runtime_config, data_wrapper, result_type)
+        return data_wrapper.ref_for_align
