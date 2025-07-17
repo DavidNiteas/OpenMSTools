@@ -1,12 +1,10 @@
-# import concurrent.futures
-
-# import logging
-# import multiprocessing
+import multiprocessing
 import os
+import threading
+from contextlib import nullcontext as No_Semaphore
 from functools import partial
-
-# import threading
-# from contextlib import nullcontext
+from multiprocessing.synchronize import Semaphore as P_Semaphore
+from threading import Semaphore as T_Semaphore
 from typing import Literal
 
 import dask.bag as db
@@ -101,18 +99,10 @@ class ExperimentAnalysisConfig(MSToolConfig):
         default=4,
         description="每个worker的线程数"
     )
-    high_load_worker_rate: float = Field(
-        default=0.5,
-        description="高负载工作的比例,用于负载均衡控制",
-        ge=0.0, le=1.0,
+    num_high_load_worker: int | None = Field(
+        default=None,
+        description="高负载工作worker的最大数量",
     )
-    # error_mode: Literal["raise_in_worker", "raise_after_worker", "raise_at_pool"] = Field(
-    #     default="raise_after_worker",
-    #     description="当工作线程/进程发生错误时，选择在何时抛出异常?\
-    #         `raise_in_worker`表示在工作线程/进程发生错误时抛出异常，\
-    #         `raise_after_worker`表示在工作线程/进程结束时抛出异常，\
-    #         `raise_at_pool`表示在工作池中抛出异常"
-    # )
 
 class ExperimentAnalysisWorkerError(Exception):
 
@@ -161,8 +151,11 @@ class ExperimentAnalysis(MSTool):
         exp_file_path: str,
         ref: oms.MSExperiment | oms.FeatureMap | bytes | None = None,
         save_dir_path: str | None = None,
+        semaphore: T_Semaphore | P_Semaphore | No_Semaphore = No_Semaphore(),
     ) -> tuple[MetaMSDataWrapper, SampleLevelLinker] | ExperimentAnalysisWorkerError:
 
+        # higly loaded worker
+        with semaphore:
             open_ms_wrapper = OpenMSDataWrapper(file_paths=[exp_file_path])
             open_ms_wrapper.init_exps(
                 worker_type="synchronous",
@@ -202,46 +195,48 @@ class ExperimentAnalysis(MSTool):
                     worker_type="synchronous",
                     num_workers=1,
                 )
-            meta_ms_wrapper = MetaMSDataWrapper(
-                file_paths=open_ms_wrapper.file_paths,
-                exp_names=pl.Series([open_ms_wrapper.exp_names[0]]),
-                spectrum_maps=[SpectrumMap.from_oms(
-                    open_ms_wrapper.exps[0], open_ms_wrapper.exp_names[0],
-                    worker_type="threads" \
-                        if runtime_config.worker_type != "synchronous" \
-                        else "synchronous",
-                    num_workers=runtime_config.num_threads_per_worker,
-                )],
-                xic_maps=[XICMap.from_oms(
-                    open_ms_wrapper.exps[0],open_ms_wrapper.exp_names[0],
-                )],
-                feature_maps=[FeatureMap.from_oms(
-                    open_ms_wrapper.exp_names[0],
-                    open_ms_wrapper.features[0],
-                    open_ms_wrapper.chromatogram_peaks[0],
-                    worker_type="threads" \
-                        if runtime_config.worker_type != "synchronous" \
-                        else "synchronous",
-                    num_workers=runtime_config.num_threads_per_worker,
-                )],
+
+        # lowly loaded worker
+        meta_ms_wrapper = MetaMSDataWrapper(
+            file_paths=open_ms_wrapper.file_paths,
+            exp_names=pl.Series([open_ms_wrapper.exp_names[0]]),
+            spectrum_maps=[SpectrumMap.from_oms(
+                open_ms_wrapper.exps[0], open_ms_wrapper.exp_names[0],
+                worker_type="threads" \
+                    if runtime_config.worker_type != "synchronous" \
+                    else "synchronous",
+                num_workers=runtime_config.num_threads_per_worker,
+            )],
+            xic_maps=[XICMap.from_oms(
+                open_ms_wrapper.exps[0],open_ms_wrapper.exp_names[0],
+            )],
+            feature_maps=[FeatureMap.from_oms(
+                open_ms_wrapper.exp_names[0],
+                open_ms_wrapper.features[0],
+                open_ms_wrapper.chromatogram_peaks[0],
+                worker_type="threads" \
+                    if runtime_config.worker_type != "synchronous" \
+                    else "synchronous",
+                num_workers=runtime_config.num_threads_per_worker,
+            )],
+        )
+        sample_level_linker = SampleLevelLinker.link_exp_data_from_cls(
+            exp_name=meta_ms_wrapper.exp_names[0],
+            spectrum_map=meta_ms_wrapper.spectrum_maps[0],
+            feature_map=meta_ms_wrapper.feature_maps[0],
+        )
+        if save_dir_path is not None:
+            meta_ms_wrapper.save(
+                save_dir_path,
+                worker_type="threads" \
+                    if runtime_config.worker_type != "synchronous" \
+                    else "synchronous",
+                num_workers=3,
             )
-            sample_level_linker = SampleLevelLinker.link_exp_data_from_cls(
-                exp_name=meta_ms_wrapper.exp_names[0],
-                spectrum_map=meta_ms_wrapper.spectrum_maps[0],
-                feature_map=meta_ms_wrapper.feature_maps[0],
+            sample_level_linker.save(
+                os.path.join(save_dir_path, "exp_datas", sample_level_linker.exp_name, "linker.sqlite")
             )
-            if save_dir_path is not None:
-                meta_ms_wrapper.save(
-                    save_dir_path,
-                    worker_type="threads" \
-                        if runtime_config.worker_type != "synchronous" \
-                        else "synchronous",
-                    num_workers=3,
-                )
-                sample_level_linker.save(
-                    os.path.join(save_dir_path, "exp_datas", sample_level_linker.exp_name, "linker.sqlite")
-                )
-            return meta_ms_wrapper,sample_level_linker
+        return meta_ms_wrapper,sample_level_linker
 
     def __call__(
         self,
@@ -268,15 +263,23 @@ class ExperimentAnalysis(MSTool):
             )
         else:
             ref_exp = None
-        if runtime_config.worker_type == "processes":
+        if runtime_config.worker_type == "processes" and ref_exp is not None:
             ref_exp_buffer = oms.String()
             oms.MzMLFile().storeBuffer(ref_exp_buffer, ref_exp)
             ref_exp = ref_exp_buffer.c_str()
+        if runtime_config.num_high_load_worker is None:
+            semaphore = No_Semaphore()
+        elif runtime_config.worker_type == "processes":
+            manager = multiprocessing.Manager()
+            semaphore = manager.Semaphore(runtime_config.num_high_load_worker)
+        else:
+            semaphore = threading.Semaphore(runtime_config.num_high_load_worker)
         single_file_pipeline = partial(
             ExperimentAnalysis._single_file_pipeline,
             runtime_config,
             ref=ref_exp,
             save_dir_path=save_dir_path,
+            semaphore=semaphore,
         )
         exp_bag = db.from_sequence(exp_file_paths,npartitions=runtime_config.num_workers)
         results_bag = exp_bag.map(single_file_pipeline)
