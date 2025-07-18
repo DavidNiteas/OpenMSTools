@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 import threading
@@ -161,6 +162,20 @@ class ExperimentAnalysis(MSTool):
                 worker_type="synchronous",
                 num_workers=1,
             )
+            if runtime_config.use_rt_aligner and ref is not None:
+                if isinstance(ref, (oms.MSExperiment, oms.FeatureMap)):
+                    open_ms_wrapper.ref_for_align = ref
+                else:
+                    open_ms_wrapper.ref_for_align = oms.MSExperiment()
+                    oms.MzMLFile().loadBuffer(ref, open_ms_wrapper.ref_for_align)
+                if isinstance(ref, oms.MSExperiment):
+                    ref_wrapper = OpenMSDataWrapper(exps=[ref])
+                    ref_wrapper = FeatureFinder(config=runtime_config.reference_analysis_config)(
+                        ref_wrapper,
+                        worker_type="synchronous",
+                        num_workers=1,
+                    )
+                    open_ms_wrapper.ref_for_align = ref_wrapper.features[0]
             if runtime_config.use_tic_smoother:
                 open_ms_wrapper = TICSmoother(config=runtime_config.tic_smoother_config)(
                     open_ms_wrapper,
@@ -178,23 +193,23 @@ class ExperimentAnalysis(MSTool):
                 worker_type="synchronous",
                 num_workers=1,
             )
-            if runtime_config.use_rt_aligner and ref is not None:
-                if isinstance(ref, (oms.MSExperiment, oms.FeatureMap)):
-                    open_ms_wrapper.ref_for_align = ref
-                else:
-                    open_ms_wrapper.ref_for_align = oms.MSExperiment()
-                    oms.MzMLFile().loadBuffer(ref, open_ms_wrapper.ref_for_align)
-                open_ms_wrapper = RTAligner(config=runtime_config.rt_aligner_config)(
-                    open_ms_wrapper,
-                    worker_type="synchronous",
-                    num_workers=1,
-                )
             if runtime_config.use_adduct_detector:
                 open_ms_wrapper = AdductDetector(config=runtime_config.adduct_detector_config)(
                     open_ms_wrapper,
                     worker_type="synchronous",
                     num_workers=1,
                 )
+            if open_ms_wrapper.ref_for_align is not None:
+                try:
+                    open_ms_wrapper = RTAligner(config=runtime_config.rt_aligner_config)(
+                        open_ms_wrapper,
+                        worker_type="synchronous",
+                        num_workers=1,
+                    )
+                except RuntimeError as e:
+                    logging.error(f"在进行RT对齐过程中,文件{exp_file_path}发生了错误，所以该文件的RT不会被对齐。\
+                                    这可能是由于参考文件与当前文件RT不匹配导致的，可以考虑更换参考文件的配置。\
+                                    错误的具体情况为：{e}.".replace(" ",""))
 
         # lowly loaded worker
         meta_ms_wrapper = MetaMSDataWrapper(
@@ -248,25 +263,37 @@ class ExperimentAnalysis(MSTool):
         **kwargs,
     ) -> tuple[MetaMSExperimentDataQueue, QueueLevelLinker]:
 
+        # if save_dir_path is not None:
+        #     os.makedirs(os.path.join(save_dir_path, "logs"), exist_ok=True)
+        #     logger = logging.getLogger('my_logger')
+        #     logger.setLevel(logging.INFO)
+        #     log_file = f"EA_{queue_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        #     log_file_path = os.path.join(save_dir_path, "logs", log_file)
+        #     file_handler = logging.FileHandler(log_file_path)
+        #     file_handler.setLevel(logging.INFO)
+        #     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        #     file_handler.setFormatter(formatter)
+        #     logger.addHandler(file_handler)
+
         runtime_config = self.config.get_runtime_config(**kwargs)
 
         if len(exp_file_paths) > 1 and runtime_config.use_feature_linker:
             if ref_file_paths is None:
                 ref_file_paths = exp_file_paths
-            ref_exp = ReferenceFeatureFinder(config=runtime_config.reference_analysis_config)(
+            ref = ReferenceFeatureFinder(config=runtime_config.reference_analysis_config)(
                 ref_file_paths,
-                result_type="experiment",
+                result_type="experiment" if runtime_config.worker_type == "processes" else "feature_map",
                 worker_type=runtime_config.worker_type \
                     if runtime_config.worker_type != "processes" \
                     else "threads",
                 num_workers=runtime_config.num_workers,
             )
         else:
-            ref_exp = None
-        if runtime_config.worker_type == "processes" and ref_exp is not None:
-            ref_exp_buffer = oms.String()
-            oms.MzMLFile().storeBuffer(ref_exp_buffer, ref_exp)
-            ref_exp = ref_exp_buffer.c_str()
+            ref = None
+        if runtime_config.worker_type == "processes" and ref is not None:
+            ref_buffer = oms.String()
+            oms.MzMLFile().storeBuffer(ref_buffer, ref)
+            ref = ref_buffer.c_str()
         if runtime_config.num_high_load_worker is None:
             semaphore = No_Semaphore()
         elif runtime_config.worker_type == "processes":
@@ -277,7 +304,7 @@ class ExperimentAnalysis(MSTool):
         single_file_pipeline = partial(
             ExperimentAnalysis._single_file_pipeline,
             runtime_config,
-            ref=ref_exp,
+            ref=ref,
             save_dir_path=save_dir_path,
             semaphore=semaphore,
         )
@@ -320,5 +347,12 @@ class ExperimentAnalysis(MSTool):
         if save_dir_path is not None:
             queue_level_linker.save(os.path.join(save_dir_path, "linker.sqlite"))
             meta_ms_wrapper.save_metadata(save_dir_path)
+            if meta_ms_wrapper.consensus_map is not None:
+                meta_ms_wrapper.consensus_map.save(os.path.join(save_dir_path, "exp_datas", "consensus_map"))
         meta_ms_wrapper = MetaMSExperimentDataQueue(**meta_ms_wrapper.model_dump())
+
+        # if save_dir_path is not None:
+        #     logger.removeHandler(file_handler)
+        #     file_handler.close()
+
         return meta_ms_wrapper, queue_level_linker
